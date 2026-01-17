@@ -1,0 +1,32 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+weather.txt
+*.log
+
+# Data (keep structure but ignore captures)
+data/captures/*.bin
+data/captures/*.mat
+data/decoded/*.png
+data/decoded/*.jpg
