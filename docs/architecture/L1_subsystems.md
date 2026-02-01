@@ -67,16 +67,19 @@
 **Inputs:**
 - RF signal (137 MHz ± Doppler offset)
 - Doppler frequency correction commands
+- Gain adjustment commands (from AI subsystem)
 
 **Outputs:**
 - Raw I/Q samples (complex float32)
 - Sample rate: 250 kHz (after decimation)
+- Real-time signal quality metrics (for AI feedback)
 
 **Key Functions:**
 - Tune to 137 MHz ± Doppler offset
 - Sample at 2.4 MHz, decimate to 250 kHz
 - Stream I/Q data to disk or real-time processing pipeline
 - Update center frequency dynamically during pass (every 1-5 seconds)
+- Report signal strength and quality metrics to AI subsystem
 
 **Performance:**
 - Sample rate: 2.4 MHz native, 250 kHz output
@@ -93,6 +96,7 @@
 **Technology:** 
 - Python (offline processing, development)
 - C++ (real-time target for V4+)
+- MATLAB (analysis and prototyping)
 
 **Inputs:**
 - Raw I/Q samples (complex float32, 250 kHz)
@@ -100,6 +104,7 @@
 **Outputs:**
 - Decoded APT image (PNG/JPEG, 8-bit grayscale)
 - Metadata (timestamp, satellite ID, max elevation, SNR)
+- Quality metrics (sync detection rate, estimated SNR, frequency error)
 
 **Key Functions:**
 - FM quadrature demodulation
@@ -108,6 +113,7 @@
 - Sync pulse detection and line synchronization
 - Image reconstruction (2 lines/second, 2080 pixels/line)
 - De-emphasis and normalization
+- Compute quality metrics for AI feedback loop
 
 **Performance:**
 - Processing latency: <10 seconds (offline), <1 second target (real-time)
@@ -124,6 +130,7 @@
 
 **Inputs:**
 - Pass predictions from Orbital Prediction Subsystem
+- Optimized schedule from AI Mission Planning Subsystem
 - System status (SDR availability, disk space, etc.)
 
 **Outputs:**
@@ -135,15 +142,84 @@
 - Trigger C++ capture program at AOS
 - Monitor pass in progress
 - Send Doppler correction updates to capture program
+- Forward AI-recommended gain adjustments during capture
 - Terminate capture at LOS
 - Archive raw I/Q and decoded images
 - Generate metadata (timestamp, max elevation, SNR estimates)
 - Monitor system health and disk space
+- Report mission outcomes to AI subsystem
 
 **Performance:**
 - Scheduling accuracy: ±10 seconds
 - Uptime: >95% unattended operation
 - Error handling: Automatic recovery from transient failures
+
+---
+
+## 6. AI Mission Planning Subsystem
+
+**Purpose:** Optimize mission planning, predict outcomes, and learn from results
+
+**Technology:**
+- Python (scikit-learn, pandas, numpy)
+- Optional: TensorFlow/PyTorch for deep learning extensions
+
+**Inputs:**
+- Pass predictions (from Orbital Prediction Subsystem)
+- Weather forecasts (external API or manual input)
+- Historical mission data (outcomes, metrics, conditions)
+- Real-time signal quality (from Digital Capture Subsystem)
+- Decoded image quality metrics (from DSP Subsystem)
+
+**Outputs:**
+- Optimized capture schedule (7-day rolling window)
+- Per-pass success probability predictions
+- Recommended gain settings per pass
+- Real-time adaptive recommendations (gain adjustments, anomaly alerts)
+- Performance analytics and trend reports
+
+**Key Functions:**
+
+### Planning Phase
+- Score passes using multi-factor model (elevation, weather, time, history)
+- Generate optimal schedule balancing coverage vs. success probability
+- Handle resource constraints (power budget, storage, operator availability)
+- Re-plan when conditions change (weather updates, hardware issues)
+
+### Prediction Phase
+- Train supervised ML models on historical data
+- Features: elevation, weather conditions, time of day, antenna config, gain setting
+- Target: decode success (binary) or SNR (continuous)
+- Validate models using cross-validation and holdout testing
+
+### Execution Phase
+- Monitor real-time metrics during capture
+- Compare observed signal quality to predictions
+- Generate adaptive recommendations (increase gain, flag anomaly)
+- Log all decisions and observations
+
+### Learning Phase
+- Ingest mission outcomes after each capture
+- Update feature store with new data points
+- Retrain models periodically (batch) or continuously (online learning)
+- Identify failure patterns and generate operational recommendations
+
+### Analytics Phase
+- Generate dashboards and reports
+- Track success rate trends over time
+- Compare predicted vs. actual outcomes
+- Identify systematic issues (e.g., certain antenna orientations underperform)
+
+**Performance:**
+- Schedule generation: <5 seconds for 7-day window
+- Prediction latency: <100 ms per pass
+- Model accuracy: >80% correct success/failure prediction (target)
+- Learning update: Daily batch retraining or per-mission online update
+
+**Data Requirements:**
+- Minimum 20-30 historical missions for initial model training
+- Weather data: temperature, cloud cover, precipitation probability
+- Hardware state: antenna orientation, LNA status, SDR health
 
 ---
 
@@ -153,17 +229,42 @@
 - Pass schedule JSON file
 - Doppler frequency profile
 
+**Orbital Prediction → AI Mission Planning:**
+- Raw pass data (AOS, LOS, elevation, azimuth)
+- Doppler profile for each pass
+
+**AI Mission Planning → Automation:**
+- Optimized capture schedule (which passes to capture)
+- Recommended settings per pass (gain, duration margins)
+- Priority rankings
+
 **Automation → Digital Capture:**
 - Start/stop commands
 - Real-time Doppler correction updates
+- Gain adjustment commands (from AI recommendations)
+
+**Digital Capture → AI Mission Planning:**
+- Real-time signal quality metrics (SNR estimate, frequency error)
+- Hardware status
 
 **Digital Capture → DSP/Decoding:**
 - Raw I/Q binary files
 - Metadata JSON (sample rate, frequency, duration)
 
+**DSP/Decoding → AI Mission Planning:**
+- Decode success/failure
+- Quality metrics (sync rate, estimated SNR, image quality score)
+- Detected anomalies
+
 **DSP/Decoding → User:**
 - Decoded APT images
 - Performance metrics
+
+**AI Mission Planning → User:**
+- Optimized schedule
+- Predictions and confidence scores
+- Analytics dashboards
+- Recommendations
 
 **All Subsystems → User:**
 - Logs (system events, errors, warnings)
