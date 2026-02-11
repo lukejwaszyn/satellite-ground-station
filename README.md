@@ -28,8 +28,8 @@ This project follows a formal systems engineering methodology with requirements-
 | V1 | RF link established | In Progress |
 | V2 | LNA integration and SNR improvement | Planned |
 | V3 | Functional decode (first image) | Planned |
-| V4 | Automated Doppler tracking | Planned |
-| V5 | Multi-pass performance characterization (25+ images) | Planned |
+| V4 | Automated Doppler tracking | Software Complete |
+| V5 | Multi-pass performance characterization (25+ images) | Software Complete |
 | V6 | ML mission planning integration | Planned |
 
 ---
@@ -52,151 +52,207 @@ This project follows a formal systems engineering methodology with requirements-
 
 ---
 
-## Technical Approach
+## Technical Stack
 
 ### Hardware
+| Component | Specification |
+|-----------|---------------|
+| SDR | RTL-SDR Blog V4 (R828D tuner) |
+| Antenna | Custom half-wave VHF dipole (137 MHz) |
+| LNA | BFP420 BJT, 15-20 dB gain, <1.5 dB NF (in design) |
+| Feedline | RG-59 coaxial (75Ω) |
 
-- RTL-SDR v4 software-defined radio
-- Custom half-wave VHF dipole antenna (137 MHz)
-- Low-noise amplifier (15-20 dB gain, <1.5 dB NF)
-- Coaxial RF transmission lines (50Ω impedance)
-
-### Software Stack
-
+### Software
 | Language | Purpose |
 |----------|---------|
-| Python | Orbital mechanics, ML pipeline, orchestration, APT decoding |
-| C++ | Real-time I/Q capture, Doppler tracking |
-| MATLAB | Signal processing, PSD analysis, verification |
+| Python 3.10+ | Orbital mechanics (Skyfield), ML pipeline, APT decoding, orchestration |
+| C++17 | Real-time I/Q capture, Doppler tracking, multithreaded DSP |
+| MATLAB | Signal analysis, PSD computation, verification |
 
-### Core Capabilities
+### ML Stack
+- scikit-learn (RandomForest, preprocessing pipelines)
+- XGBoost (optional)
+- joblib (model persistence)
+- pandas/NumPy (data manipulation)
 
-- **Orbital Mechanics:** SGP4 propagation via Skyfield
-- **Signal Processing:** FM demodulation, APT sync detection, image reconstruction
-- **Real-Time Control:** Automated Doppler frequency compensation in C++
-- **ML Mission Planning:** Pass scoring, success prediction, schedule optimization
+---
+
+## Development Environment
+
+Developed entirely via Unix command line workflow:
+
+### Build Systems & Tooling
+- CMake for cross-platform C++ compilation
+- Make for build automation
+- Homebrew package management (librtlsdr, dependencies)
+- Git version control with SSH authentication
+
+### Systems Programming
+- Multithreaded C++ with POSIX threads
+- Asynchronous I/O with ring buffers for real-time capture at 2.4 MS/s
+- Signal handling (SIGINT, SIGTERM) for graceful shutdown
+- Direct hardware access via librtlsdr
+- Daemon processes for unattended multi-day operation
+
+### Shell & Scripting
+- Bash scripting for automation and deployment
+- Heredocs for multi-file generation
+- sed/awk for configuration and text processing
+- Process management and job control
+
+### File System & Data Flow
+- Structured directory hierarchy for multi-language project
+- Binary file I/O for raw RF capture (8-bit I/Q interleaved)
+- JSON for configuration, scheduling, and inter-process data exchange
+- Persistent logging and mission data storage
+
+### Platform
+- Primary: macOS (Apple Silicon M4)
+- Backup: Linux/Windows (ASUS ROG G14)
+- Target: Raspberry Pi for field deployment
 
 ---
 
 ## Current Status
 
-### V0 Verification Complete (January 16, 2026)
-- SGP4 orbital propagator implemented and validated
-- Pass predictions accurate within 15 seconds vs. reference
-- Doppler frequency calculations validated
-- 7-day pass forecasts generated for State College, PA
+### V0 Complete (January 16, 2026)
+- SGP4 orbital propagator validated to ±15s accuracy
+- Doppler frequency calculations verified
+- 7-day pass forecasts for State College, PA
 
 ### Environment Verified (January 30, 2026)
-- RTL-SDR v4 detected and controlled via C++
-- MATLAB spectrum capture validated (FM band test)
-- C++ build environment configured (CMake + librtlsdr)
+- RTL-SDR v4 hardware control via C++
+- MATLAB spectrum capture validated
+- CMake + librtlsdr build system configured
 
-### V1 In Progress
-- Antenna materials acquired
-- Awaiting fabrication (coax soldering)
+### V1 In Progress (February 2026)
+- Custom VHF dipole antenna fabricated
+- Awaiting first satellite capture
+
+### V4-V5 Software Complete (February 11, 2026)
+- Full automation pipeline operational
+- Real-time C++ capture with ring buffer
+- Doppler tracking from JSON profiles
+- Mission logging and ML data store
+- End-to-end runner with daemon mode
 
 ---
 
 ## Project Structure
-
 ```
 satellite-ground-station/
 ├── docs/
-│   ├── requirements/           # Functional (FR-1 to FR-7), performance, interface
-│   ├── architecture/           # L0-L2, interface control, verification plan
-│   └── ml/                     # ML architecture, feature specs, model cards
+│   ├── requirements/           # FR-1 to FR-7, performance, interface specs
+│   ├── architecture/           # L0-L2 decomposition, ICDs, verification plan
+│   └── ml/                     # ML architecture, feature definitions
 │
 ├── python/
-│   ├── predict_passes.py       # SGP4 propagator [EXISTS]
-│   ├── doppler_calc.py         # Doppler frequency profiles [PLANNED]
-│   ├── decode_apt.py           # APT demodulation and image decode [PLANNED]
-│   ├── schedule_captures.py    # Automation orchestrator [PLANNED]
+│   ├── predict_passes.py       # SGP4 orbital propagator [COMPLETE]
+│   ├── doppler_calc.py         # Doppler shift profiles [COMPLETE]
+│   ├── schedule_captures.py    # Pass scheduling, daemon mode [COMPLETE]
+│   ├── data_store.py           # Mission logging, ML training data [COMPLETE]
+│   ├── run_mission.py          # End-to-end automation [COMPLETE]
+│   ├── demod/
+│   │   ├── decode_apt.py       # Raw I/Q to APT image [COMPLETE]
+│   │   └── decode_apt_wav.py   # WAV decoder for testing [COMPLETE]
 │   └── ml/
-│       ├── feature_engineering.py
-│       ├── pass_scorer.py
-│       ├── ml_predictor.py
-│       ├── scheduler_optimizer.py
-│       ├── model_trainer.py
-│       └── data_store.py
+│       ├── feature_engineering.py  [PLANNED]
+│       ├── pass_scorer.py          [PLANNED]
+│       ├── ml_predictor.py         [PLANNED]
+│       ├── scheduler_optimizer.py  [PLANNED]
+│       └── model_trainer.py        [PLANNED]
 │
 ├── cpp/
 │   ├── src/
-│   │   ├── rtlsdr_test.cpp     # Hardware verification [EXISTS]
-│   │   ├── rtlsdr_capture.cpp  # Real-time I/Q streaming [PLANNED]
-│   │   └── doppler_tracker.cpp # Real-time frequency correction [PLANNED]
-│   └── CMakeLists.txt          # Build configuration [EXISTS]
+│   │   ├── rtlsdr_test.cpp     # Hardware verification [COMPLETE]
+│   │   ├── rtlsdr_capture.cpp  # Async I/Q streaming [COMPLETE]
+│   │   └── doppler_tracker.cpp # Real-time frequency correction [COMPLETE]
+│   ├── build/                  # Compiled executables
+│   └── CMakeLists.txt          # Build configuration [COMPLETE]
 │
 ├── matlab/
-│   ├── tests/                  # Environment and SDR verification
+│   ├── tests/                  # SDR and environment verification
 │   ├── capture/                # I/Q capture scripts
-│   ├── analysis/               # Post-capture analysis
-│   └── utilities/              # Metrics computation
+│   ├── analysis/               # Post-capture metrics
+│   └── utilities/              # PSD, SNR computation
 │
 └── data/
     ├── tle/                    # Cached TLE files
     ├── captures/               # Raw I/Q recordings
-    ├── decoded/                # APT images
-    ├── logs/                   # System logs
+    ├── decoded/                # APT images (PNG)
+    ├── doppler/                # Doppler profiles (JSON)
     └── ml/
-        ├── training/           # Historical mission data
-        ├── models/             # Trained model files
-        └── predictions/        # Prediction logs
+        ├── training/           # Mission outcome data
+        └── models/             # Trained model files
+```
+
+---
+
+## Quick Start
+
+### Prerequisites
+```bash
+brew install librtlsdr cmake
+pip install skyfield numpy scipy pillow
+```
+
+### Build C++ Components
+```bash
+cd cpp && mkdir -p build && cd build
+cmake .. && make
+```
+
+### List Upcoming Passes
+```bash
+python3 python/schedule_captures.py list
+```
+
+### Run Mission (Dry Run)
+```bash
+python3 python/run_mission.py --dry-run
+```
+
+### Run Mission (Full Capture)
+```bash
+python3 python/run_mission.py --min-el 30
+```
+
+### Manual Capture
+```bash
+./cpp/build/rtlsdr_capture -f 137100000 -g 40 -d 900 -o capture.bin
+```
+
+### Decode APT Image
+```bash
+python3 python/demod/decode_apt.py data/captures/capture.bin
+```
+
+### Run Capture Daemon (24hr)
+```bash
+python3 python/schedule_captures.py daemon --hours 24
 ```
 
 ---
 
 ## Documentation
 
-### Requirements
-- Functional requirements (FR-1 through FR-7)
-- Performance requirements (PR-1 through PR-4)
-- Interface requirements (hardware, software, data)
-
-### Architecture
-- L0 system context (external entities, boundaries)
-- L1 subsystem decomposition (6 subsystems including AI mission planning)
-- L2 implementation details (multi-language stack, ML pipeline)
-- Interface Control Document (5 ICDs with schemas)
-
-### ML System
-- ML architecture specification
-- Feature definitions
-- Model training and validation procedures
-
-### Verification
-- V0-V6 staged verification plan
-- Pass/fail criteria for each stage
-- Requirements traceability matrix
-
----
-
-## Technologies
-
-**Languages:**
-- Python 3.10+ (Skyfield, NumPy, SciPy, scikit-learn, pandas)
-- MATLAB R2025b (Signal Processing, Communications, Satellite Comms Toolboxes)
-- C++17 (librtlsdr, real-time DSP)
-
-**ML Stack:**
-- scikit-learn (RandomForest, preprocessing pipelines)
-- XGBoost (optional)
-- joblib (model persistence)
-
-**Hardware:**
-- RTL-SDR Blog V4 (R828D tuner)
-- Custom VHF dipole antenna
-- Custom LNA PCB
-
-**Platform:**
-- Primary: macOS (Apple Silicon M4)
-- Backup: Windows/Linux (ASUS ROG G14)
+| Document | Description |
+|----------|-------------|
+| Functional Requirements | FR-1 through FR-7 (orbital, RF, DSP, automation, ML) |
+| Performance Requirements | PR-1 through PR-4 (timing, SNR, success rate) |
+| L0-L2 Architecture | System context, subsystem decomposition, implementation |
+| Interface Control | 5 ICDs covering hardware, software, data interfaces |
+| Verification Plan | V0-V6 staged verification with pass/fail criteria |
+| LNA Design | BFP420 schematic, 75Ω/50Ω matching, BOM, test plan |
 
 ---
 
 ## Author
 
-Luke Waszyn
+Luke Waszyn  
 Engineering Science, The Pennsylvania State University
+
+GitHub: [lukejwaszyn](https://github.com/lukejwaszyn)
 
 ---
 
@@ -208,4 +264,6 @@ MIT License - see LICENSE file for details
 
 ## Acknowledgments
 
-This project applies formal systems engineering methodology inspired by JPL's approach to mission design and verification. Orbital mechanics implementation uses the Skyfield library by Brandon Rhodes.
+- Systems engineering methodology inspired by JPL mission design practices
+- Orbital mechanics via [Skyfield](https://rhodesmill.org/skyfield/) by Brandon Rhodes
+- RTL-SDR community for hardware documentation and librtlsdr
