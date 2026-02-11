@@ -149,14 +149,14 @@ def select_best_pass(passes):
         return None
     
     # Score passes: higher elevation = better, sooner = slightly better
-    now = datetime.utcnow()
+    now = datetime.utcnow().replace(tzinfo=None)
     
     def score_pass(p):
         # Elevation is primary factor (0-90 degrees)
         el_score = p['max_elevation']
         
         # Time factor: slight preference for sooner passes
-        hours_until = (p['aos_time'] - now).total_seconds() / 3600
+        hours_until = (p['aos_time'].replace(tzinfo=None) - now).total_seconds() / 3600
         time_score = max(0, 10 - hours_until)  # Up to 10 bonus points for passes within 10 hours
         
         return el_score + time_score
@@ -169,7 +169,7 @@ def wait_for_pass(pass_info):
     aos = pass_info['aos_time']
     start_time = aos - timedelta(seconds=CONFIG['pre_aos_margin_sec'])
     
-    now = datetime.utcnow()
+    now = datetime.utcnow().replace(tzinfo=None)
     wait_seconds = (start_time - now).total_seconds()
     
     if wait_seconds <= 0:
@@ -192,7 +192,7 @@ def wait_for_pass(pass_info):
         else:
             time.sleep(1)
         
-        now = datetime.utcnow()
+        now = datetime.utcnow().replace(tzinfo=None)
         wait_seconds = (start_time - now).total_seconds()
     
     return True
