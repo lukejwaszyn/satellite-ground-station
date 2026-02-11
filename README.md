@@ -4,7 +4,7 @@
 
 Autonomous ground station for NOAA weather satellite APT image reception using custom VHF antenna, low-noise amplifier, real-time DSP pipeline, and AI-driven mission planning.
 
-**Project Duration:** 7 weeks (January 16 - March 30, 2026)
+**Project Duration:** 10 weeks (January 16 - March 30, 2026)
 
 **Objective:** Autonomous NOAA APT reception with >80% decode success rate and ML-optimized mission scheduling
 
