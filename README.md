@@ -30,7 +30,7 @@ This project follows a formal systems engineering methodology with requirements-
 | V3 | Functional decode (first image) | Planned |
 | V4 | Automated Doppler tracking | Software Complete |
 | V5 | Multi-pass performance characterization (25+ images) | Software Complete |
-| V6 | ML mission planning integration | Planned |
+| V6 | ML mission planning integration | Software Complete |
 
 ---
 
@@ -70,10 +70,9 @@ This project follows a formal systems engineering methodology with requirements-
 | MATLAB | Signal analysis, PSD computation, verification |
 
 ### ML Stack
-- scikit-learn (RandomForest, preprocessing pipelines)
-- XGBoost (optional)
+- scikit-learn (RandomForest classifier/regressor)
+- pandas/NumPy (feature engineering)
 - joblib (model persistence)
-- pandas/NumPy (data manipulation)
 
 ---
 
@@ -129,12 +128,14 @@ Developed entirely via Unix command line workflow:
 - Custom VHF dipole antenna fabricated
 - Awaiting first satellite capture
 
-### V4-V5 Software Complete (February 11, 2026)
+### V4-V6 Software Complete (February 11, 2026)
 - Full automation pipeline operational
 - Real-time C++ capture with ring buffer
 - Doppler tracking from JSON profiles
 - Mission logging and ML data store
 - End-to-end runner with daemon mode
+- ML pipeline: feature engineering, scoring, prediction, training, optimization
+- Schedule optimizer generating ranked capture plans
 
 ---
 
@@ -156,11 +157,11 @@ satellite-ground-station/
 │   │   ├── decode_apt.py       # Raw I/Q to APT image [COMPLETE]
 │   │   └── decode_apt_wav.py   # WAV decoder for testing [COMPLETE]
 │   └── ml/
-│       ├── feature_engineering.py  [PLANNED]
-│       ├── pass_scorer.py          [PLANNED]
-│       ├── ml_predictor.py         [PLANNED]
-│       ├── scheduler_optimizer.py  [PLANNED]
-│       └── model_trainer.py        [PLANNED]
+│       ├── feature_engineering.py  # Orbital, weather, historical features [COMPLETE]
+│       ├── pass_scorer.py          # Rule-based baseline scoring [COMPLETE]
+│       ├── ml_predictor.py         # ML model inference [COMPLETE]
+│       ├── model_trainer.py        # RandomForest training pipeline [COMPLETE]
+│       └── scheduler_optimizer.py  # Constrained schedule optimization [COMPLETE]
 │
 ├── cpp/
 │   ├── src/
@@ -183,7 +184,7 @@ satellite-ground-station/
     ├── doppler/                # Doppler profiles (JSON)
     └── ml/
         ├── training/           # Mission outcome data
-        └── models/             # Trained model files
+        └── models/             # Trained model files (.joblib)
 ```
 
 ---
@@ -193,7 +194,7 @@ satellite-ground-station/
 ### Prerequisites
 ```bash
 brew install librtlsdr cmake
-pip install skyfield numpy scipy pillow
+pip3 install skyfield numpy scipy pillow pandas scikit-learn joblib
 ```
 
 ### Build C++ Components
@@ -205,6 +206,11 @@ cmake .. && make
 ### List Upcoming Passes
 ```bash
 python3 python/schedule_captures.py list
+```
+
+### Generate Optimized Schedule
+```bash
+PYTHONPATH=. python3 python/ml/scheduler_optimizer.py --hours 48
 ```
 
 ### Run Mission (Dry Run)
@@ -231,6 +237,38 @@ python3 python/demod/decode_apt.py data/captures/capture.bin
 ```bash
 python3 python/schedule_captures.py daemon --hours 24
 ```
+
+### Train ML Models (after 20+ missions)
+```bash
+PYTHONPATH=. python3 python/ml/model_trainer.py train
+```
+
+---
+
+## ML Pipeline
+
+The system includes a complete ML pipeline for mission optimization:
+
+### Feature Engineering
+- **Orbital:** max elevation, duration, azimuth range, time of day
+- **Weather:** cloud cover, precipitation probability, temperature
+- **Historical:** recent success rate, satellite-specific performance
+- **Hardware:** gain setting, LNA status, antenna configuration
+
+### Models
+- **Success Classifier:** RandomForest predicting decode success (binary)
+- **SNR Regressor:** RandomForest predicting signal quality (dB)
+
+### Training
+- Minimum 20 mission samples required
+- 80/20 train/test split with cross-validation
+- Automatic feature importance analysis
+- Model versioning and metadata tracking
+
+### Scheduling
+- Constraint-based optimization (min gap, max per day, diversity)
+- Ranked pass recommendations with confidence scores
+- Rule-based fallback when ML models unavailable
 
 ---
 
