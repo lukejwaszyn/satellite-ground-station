@@ -3,23 +3,23 @@
 generate_orbital_data.py
 Satellite Ground Station - Orbital Data Generator for 3D Visualizer
 
-Fetches real NOAA TLEs from Celestrak, propagates with SGP4 via Skyfield,
+Fetches real TLEs from Celestrak, propagates with SGP4 via Skyfield,
 and exports satellite positions, pass predictions, and Doppler profiles
 as JSON for the SATCOM 3D visualizer.
+
+Tracks a mix of satellites for a full mission ops display:
+  - NOAA 20 (primary imaging target)
+  - NOAA 21, METEOR-M (weather constellation)
+  - ISS, Landsat, Terra, Aqua (display)
 
 Reuses patterns from:
   - predict_passes.py  (SGP4 propagation, pass detection, event grouping)
   - doppler_calc.py    (radial velocity, Doppler shift calculation)
   - schedule_captures.py (multi-satellite pass finding, TLE caching)
 
-Data flow:
-  Celestrak → TLE → Skyfield SGP4 → positions + passes + Doppler → JSON
-
 Usage:
     python generate_orbital_data.py
-    python generate_orbital_data.py --hours 24 --step 30 --output orbital_data.json
-
-Output: orbital_data.json consumed by satellite-viz.html
+    python generate_orbital_data.py --hours 24 --step 30 -o orbital_data.json
 
 Author: Luke Waszyn
 Date: February 2026
@@ -44,139 +44,220 @@ except ImportError as e:
 
 
 # =============================================================
-# Ground Station Configuration — State College, PA
+# Ground Station — State College, PA
 # Matches predict_passes.py and doppler_calc.py
 # =============================================================
-GS_LAT = 40.7934       # degrees N
-GS_LON = -77.8600      # degrees E (negative = West)
-GS_ELEV = 376.0        # meters ASL
-MIN_ELEVATION = 10.0   # degrees — pass detection threshold
+GS_LAT = 40.7934
+GS_LON = -77.8600
+GS_ELEV = 376.0
+MIN_ELEVATION = 10.0
+
+# Speed of light (m/s) — matches doppler_calc.py
+C = 299792458.0
 
 # =============================================================
-# NOAA APT Satellites
-# Frequencies from doppler_calc.py NOAA_FREQUENCIES
+# Satellite Catalog
+#
+# role:
+#   'primary'  — imaging target (NOAA 20), gets Doppler profiles
+#   'weather'  — other weather sats, gets Doppler profiles
+#   'display'  — tracked for visualization only, no Doppler
+#
+# freq_hz:
+#   Set for satellites with known downlink (used for Doppler calc).
+#   None for display-only satellites.
+#
+# group:
+#   Celestrak TLE group the satellite lives in.
+#   Used to know which bulk file to fetch.
+#   'individual' means fetch by NORAD ID directly.
 # =============================================================
-NOAA_SATS = {
-    'NOAA 15': {
-        'freq_hz': 137.6200e6,
-        'color': '#f472b6',
-        'norad_id': 25338,
-        'search_names': ['NOAA 15', 'NOAA-15', 'NOAA15'],
+TRACKED_SATS = {
+    # === Primary imaging target ===
+    'NOAA 20': {
+        'freq_hz': 137.1000e6,
+        'color': '#34d399',
+        'norad_id': 43013,
+        'role': 'primary',
+        'group': 'weather',
+        'search_names': ['NOAA 20', 'NOAA-20', 'JPSS-1'],
+    },
+
+    # === Weather constellation ===
+    'NOAA 21': {
+        'freq_hz': 137.1000e6,
+        'color': '#2dd4bf',
+        'norad_id': 54234,
+        'role': 'weather',
+        'group': 'weather',
+        'search_names': ['NOAA 21', 'NOAA-21', 'JPSS-2'],
     },
     'NOAA 18': {
         'freq_hz': 137.9125e6,
         'color': '#38bdf8',
         'norad_id': 28654,
-        'search_names': ['NOAA 18', 'NOAA-18', 'NOAA18'],
+        'role': 'weather',
+        'group': 'individual',
+        'search_names': ['NOAA 18', 'NOAA-18'],
     },
     'NOAA 19': {
         'freq_hz': 137.1000e6,
         'color': '#a78bfa',
         'norad_id': 33591,
-        'search_names': ['NOAA 19', 'NOAA-19', 'NOAA19'],
+        'role': 'weather',
+        'group': 'individual',
+        'search_names': ['NOAA 19', 'NOAA-19'],
     },
-    'NOAA 20': {
+    'NOAA 15': {
+        'freq_hz': 137.6200e6,
+        'color': '#f472b6',
+        'norad_id': 25338,
+        'role': 'weather',
+        'group': 'individual',
+        'search_names': ['NOAA 15', 'NOAA-15'],
+    },
+    'METEOR-M2 3': {
+        'freq_hz': 137.9000e6,
+        'color': '#fb923c',
+        'norad_id': 57166,
+        'role': 'weather',
+        'group': 'weather',
+        'search_names': ['METEOR-M2 3', 'METEOR-M 2-3', 'METEOR M2-3'],
+    },
+    'METEOR-M2 4': {
         'freq_hz': 137.1000e6,
-        'color': '#34d399',
-        'norad_id': 43013,
-        'search_names': ['NOAA 20', 'NOAA-20', 'NOAA20', 'JPSS-1', 'JPSS 1'],
+        'color': '#f97316',
+        'norad_id': 59051,
+        'role': 'weather',
+        'group': 'weather',
+        'search_names': ['METEOR-M2 4', 'METEOR-M 2-4', 'METEOR M2-4'],
+    },
+
+    # === Display satellites ===
+    'ISS': {
+        'freq_hz': None,
+        'color': '#fbbf24',
+        'norad_id': 25544,
+        'role': 'display',
+        'group': 'stations',
+        'search_names': ['ISS (ZARYA)', 'ISS', 'ZARYA'],
+    },
+    'TERRA': {
+        'freq_hz': None,
+        'color': '#94a3b8',
+        'norad_id': 25994,
+        'role': 'display',
+        'group': 'resource',
+        'search_names': ['TERRA'],
+    },
+    'AQUA': {
+        'freq_hz': None,
+        'color': '#67e8f9',
+        'norad_id': 27424,
+        'role': 'display',
+        'group': 'resource',
+        'search_names': ['AQUA'],
+    },
+    'LANDSAT 9': {
+        'freq_hz': None,
+        'color': '#86efac',
+        'norad_id': 49260,
+        'role': 'display',
+        'group': 'resource',
+        'search_names': ['LANDSAT 9'],
     },
 }
 
-# Speed of light (m/s) — matches doppler_calc.py
-C = 299792458.0
+# Celestrak group URLs
+CELESTRAK_GROUPS = {
+    'weather':  'https://celestrak.org/NORAD/elements/gp.php?GROUP=weather&FORMAT=tle',
+    'stations': 'https://celestrak.org/NORAD/elements/gp.php?GROUP=stations&FORMAT=tle',
+    'resource': 'https://celestrak.org/NORAD/elements/gp.php?GROUP=resource&FORMAT=tle',
+    'noaa':     'https://celestrak.org/NORAD/elements/gp.php?GROUP=noaa&FORMAT=tle',
+}
+INDIVIDUAL_URL = 'https://celestrak.org/NORAD/elements/gp.php?CATNR={}&FORMAT=tle'
 
 
-def fetch_tles(tle_file='weather.txt', max_age_hours=24):
+def fetch_tles(tle_dir='.', max_age_hours=24):
     """
-    Fetch NOAA TLEs from Celestrak with caching.
-    Mirrors schedule_captures.py TLE handling.
-
-    Uses multiple Celestrak sources because NOAA 15/18/19 were removed
-    from the 'weather' group but are still trackable by NORAD ID.
+    Fetch TLEs from multiple Celestrak groups plus individual lookups.
+    Returns matched satellites and Skyfield timescale.
     """
     ts = load.timescale()
+    all_sats = []
 
-    # Primary source: Celestrak weather group
-    weather_url = 'https://celestrak.org/NORAD/elements/gp.php?GROUP=weather&FORMAT=tle'
-    # Secondary source: NOAA group (sometimes includes older birds)
-    noaa_url = 'https://celestrak.org/NORAD/elements/gp.php?GROUP=noaa&FORMAT=tle'
-    # Tertiary: individual satellite lookups by NORAD ID
-    individual_url = 'https://celestrak.org/NORAD/elements/gp.php?CATNR={}&FORMAT=tle'
+    # Determine which groups we need
+    needed_groups = set()
+    for info in TRACKED_SATS.values():
+        if info['group'] != 'individual':
+            needed_groups.add(info['group'])
 
-    need_fetch = True
-    if os.path.exists(tle_file):
-        age_sec = time_module.time() - os.path.getmtime(tle_file)
-        if age_sec < max_age_hours * 3600:
-            need_fetch = False
-            print(f"[TLE] Using cached {tle_file} (age: {age_sec/3600:.1f}h)")
+    # Fetch each group
+    for group_name in sorted(needed_groups):
+        url = CELESTRAK_GROUPS.get(group_name)
+        if not url:
+            continue
 
-    satellites = []
+        cache_file = os.path.join(tle_dir, f'tle_{group_name}.txt')
+        need_fetch = True
 
-    if need_fetch:
-        # Fetch from weather group
-        print("[TLE] Fetching weather group from Celestrak...")
-        try:
-            weather_sats = load.tle_file(weather_url, filename=tle_file, reload=True)
-            satellites.extend(weather_sats)
-            print(f"[TLE] Weather group: {len(weather_sats)} satellites")
-        except Exception as e:
-            print(f"[TLE] Weather group fetch failed: {e}")
+        if os.path.exists(cache_file):
+            age_sec = time_module.time() - os.path.getmtime(cache_file)
+            if age_sec < max_age_hours * 3600:
+                need_fetch = False
 
-        # Fetch from NOAA group
-        print("[TLE] Fetching NOAA group from Celestrak...")
-        try:
-            noaa_file = tle_file.replace('.txt', '_noaa.txt')
-            noaa_sats = load.tle_file(noaa_url, filename=noaa_file, reload=True)
-            satellites.extend(noaa_sats)
-            print(f"[TLE] NOAA group: {len(noaa_sats)} satellites")
-        except Exception as e:
-            print(f"[TLE] NOAA group fetch failed: {e}")
+        if need_fetch:
+            print(f"[TLE] Fetching '{group_name}' group...")
+            try:
+                sats = load.tle_file(url, filename=cache_file, reload=True)
+                all_sats.extend(sats)
+                print(f"[TLE]   {len(sats)} satellites")
+            except Exception as e:
+                print(f"[TLE]   Fetch failed: {e}")
+                if os.path.exists(cache_file):
+                    all_sats.extend(load.tle_file(cache_file))
+        else:
+            sats = load.tle_file(cache_file)
+            all_sats.extend(sats)
+            print(f"[TLE] Cached '{group_name}' group ({len(sats)} sats)")
 
-        # Fetch any missing satellites individually by NORAD ID
-        seen_norad = {sat.model.satnum for sat in satellites}
-        for sat_name, info in NOAA_SATS.items():
-            if info['norad_id'] not in seen_norad:
-                print(f"[TLE] Fetching {sat_name} individually (NORAD {info['norad_id']})...")
+    # Fetch individual satellites not found in any group
+    seen_norad = {sat.model.satnum for sat in all_sats}
+    for sat_name, info in TRACKED_SATS.items():
+        if info['group'] == 'individual' or info['norad_id'] not in seen_norad:
+            cache_file = os.path.join(tle_dir, f"tle_{info['norad_id']}.txt")
+            need_fetch = True
+
+            if os.path.exists(cache_file):
+                age_sec = time_module.time() - os.path.getmtime(cache_file)
+                if age_sec < max_age_hours * 3600:
+                    need_fetch = False
+
+            if need_fetch:
+                print(f"[TLE] Fetching {sat_name} (NORAD {info['norad_id']})...")
                 try:
-                    url = individual_url.format(info['norad_id'])
-                    ind_file = f"tle_{info['norad_id']}.txt"
-                    ind_sats = load.tle_file(url, filename=ind_file, reload=True)
-                    satellites.extend(ind_sats)
-                    print(f"[TLE] Got {len(ind_sats)} entry for {sat_name}")
+                    url = INDIVIDUAL_URL.format(info['norad_id'])
+                    ind_sats = load.tle_file(url, filename=cache_file, reload=True)
+                    all_sats.extend(ind_sats)
+                    print(f"[TLE]   OK")
                 except Exception as e:
-                    print(f"[TLE] Individual fetch for {sat_name} failed: {e}")
-
-        if not satellites:
-            if os.path.exists(tle_file):
-                print(f"[TLE] All fetches failed, falling back to cached {tle_file}")
-                satellites = load.tle_file(tle_file)
+                    print(f"[TLE]   Failed: {e}")
+                    if os.path.exists(cache_file):
+                        all_sats.extend(load.tle_file(cache_file))
             else:
-                print("[TLE] ERROR: No TLE data available")
-                sys.exit(1)
-    else:
-        satellites = load.tle_file(tle_file)
-        # Also load supplementary cached files if they exist
-        for suffix in ['_noaa.txt']:
-            supp = tle_file.replace('.txt', suffix)
-            if os.path.exists(supp):
-                satellites.extend(load.tle_file(supp))
-        for info in NOAA_SATS.values():
-            ind_file = f"tle_{info['norad_id']}.txt"
-            if os.path.exists(ind_file):
-                satellites.extend(load.tle_file(ind_file))
+                ind_sats = load.tle_file(cache_file)
+                all_sats.extend(ind_sats)
 
-    by_name = {sat.name: sat for sat in satellites}
-    by_number = {sat.model.satnum: sat for sat in satellites}
+    # Match satellites
+    by_number = {sat.model.satnum: sat for sat in all_sats}
+    by_name = {sat.name: sat for sat in all_sats}
 
-    # Helper: normalize a TLE name for fuzzy matching
-    # "NOAA 15 [B]" -> "NOAA 15", "NOAA 20 (JPSS-1)" -> "NOAA 20 JPSS-1"
     def normalize(s):
         return s.upper().replace('-', ' ').replace('[', '').replace(']', '').replace('(', '').replace(')', '').strip()
 
     matched = {}
-    for display_name, info in NOAA_SATS.items():
-        # Strategy 1: NORAD catalog number (most reliable)
+    for display_name, info in TRACKED_SATS.items():
+        # Strategy 1: NORAD ID
         if info['norad_id'] in by_number:
             sat = by_number[info['norad_id']]
             matched[display_name] = sat
@@ -184,15 +265,15 @@ def fetch_tles(tle_file='weather.txt', max_age_hours=24):
             print(f"[TLE] Matched: {display_name} -> {sat.name} (NORAD {info['norad_id']}, epoch: {epoch_str})")
             continue
 
-        # Strategy 2: Name matching with normalization
+        # Strategy 2: Name matching
         found = False
-        for search_name in info['search_names']:
+        for search_name in info.get('search_names', []):
             norm_search = normalize(search_name)
             for tle_name, sat in by_name.items():
                 if norm_search in normalize(tle_name):
                     matched[display_name] = sat
                     epoch_str = sat.epoch.utc_strftime('%Y-%m-%d %H:%M')
-                    print(f"[TLE] Matched: {display_name} -> {sat.name} (name match, epoch: {epoch_str})")
+                    print(f"[TLE] Matched: {display_name} -> {sat.name} (name, epoch: {epoch_str})")
                     found = True
                     break
             if found:
@@ -201,18 +282,10 @@ def fetch_tles(tle_file='weather.txt', max_age_hours=24):
         if not found:
             print(f"[TLE] WARNING: Could not match {display_name} (NORAD {info['norad_id']})")
 
-    print(f"[TLE] Matched {len(matched)}/{len(NOAA_SATS)} NOAA satellites")
-
-    # Debug: show all NOAA-related entries in TLE file if any are missing
-    if len(matched) < len(NOAA_SATS):
-        print("[TLE] Available NOAA entries in TLE file:")
-        for name in sorted(by_name.keys()):
-            if 'NOAA' in name.upper():
-                sat = by_name[name]
-                print(f"  {name} (NORAD {sat.model.satnum})")
+    print(f"[TLE] Matched {len(matched)}/{len(TRACKED_SATS)} satellites")
 
     if not matched:
-        print("[TLE] ERROR: No NOAA satellites matched at all")
+        print("[TLE] ERROR: No satellites matched")
         sys.exit(1)
 
     return matched, ts
@@ -220,12 +293,7 @@ def fetch_tles(tle_file='weather.txt', max_age_hours=24):
 
 def propagate_positions(satellite, ts, observer, t_start_tt, duration_hours, step_seconds):
     """
-    Propagate satellite and compute position samples for 3D rendering.
-
-    Each sample includes:
-      - Geocentric position (GCRS km) for Three.js globe
-      - Geodetic lat/lon/alt for ground track
-      - Topocentric el/az/range from ground station
+    Propagate satellite. Returns position samples for 3D rendering.
     """
     num_steps = int(duration_hours * 3600 / step_seconds) + 1
     positions = []
@@ -262,11 +330,9 @@ def propagate_positions(satellite, ts, observer, t_start_tt, duration_hours, ste
     return positions
 
 
-def find_passes(satellite, sat_name, ts, observer, t_start_tt, duration_hours):
+def find_passes(satellite, sat_name, ts, observer, t_start_tt, duration_hours, freq_hz=None):
     """
-    Find all passes above MIN_ELEVATION.
-    Mirrors predict_passes.py event grouping (AOS=0, TCA=1, LOS=2).
-    Includes Doppler profile for each pass (mirrors doppler_calc.py).
+    Find passes above MIN_ELEVATION. Includes Doppler if freq_hz is set.
     """
     t0 = ts.tt_jd(t_start_tt)
     t1 = ts.tt_jd(t_start_tt + duration_hours / 24.0)
@@ -312,10 +378,14 @@ def find_passes(satellite, sat_name, ts, observer, t_start_tt, duration_hours):
                     (los_dt - aos_dt).total_seconds(), 1
                 )
 
-                current_pass['doppler'] = compute_doppler_for_pass(
-                    satellite, observer, ts, aos_dt, los_dt,
-                    NOAA_SATS[sat_name]['freq_hz']
-                )
+                # Doppler only for satellites with known frequency
+                if freq_hz:
+                    current_pass['doppler'] = compute_doppler_for_pass(
+                        satellite, observer, ts, aos_dt, los_dt, freq_hz
+                    )
+                else:
+                    current_pass['doppler'] = None
+
                 passes.append(current_pass)
             current_pass = {}
 
@@ -325,10 +395,7 @@ def find_passes(satellite, sat_name, ts, observer, t_start_tt, duration_hours):
 def compute_doppler_for_pass(satellite, observer, ts, aos_dt, los_dt,
                              center_freq_hz, time_step_sec=5.0):
     """
-    Compute Doppler shift profile for a single pass.
-    Mirrors doppler_calc.py calculate_doppler_profile() exactly:
-      v_radial = dot(velocity, unit_range_vector)
-      doppler = -f_tx * (v_radial_m_s / C)
+    Doppler shift profile for a pass. Mirrors doppler_calc.py exactly.
     """
     duration_sec = (los_dt - aos_dt).total_seconds()
     num_points = int(duration_sec / time_step_sec) + 1
@@ -352,8 +419,7 @@ def compute_doppler_for_pass(satellite, observer, ts, aos_dt, los_dt,
         range_km = float(np.linalg.norm(pos))
         if range_km > 0:
             range_unit = pos / range_km
-            v_radial_km_s = float(np.dot(vel, range_unit))
-            v_radial_m_s = v_radial_km_s * 1000.0
+            v_radial_m_s = float(np.dot(vel, range_unit)) * 1000.0
             doppler = -center_freq_hz * (v_radial_m_s / C)
         else:
             doppler = 0.0
@@ -373,7 +439,7 @@ def compute_doppler_for_pass(satellite, observer, ts, aos_dt, los_dt,
 
 def generate_data(duration_hours=24, position_step_sec=30, output_path='orbital_data.json'):
     """
-    Main pipeline: TLE fetch → propagation → pass finding → JSON export.
+    Main pipeline: TLE fetch -> propagation -> pass finding -> JSON export.
     """
     print("=" * 60)
     print("SATCOM - Orbital Data Generator")
@@ -383,6 +449,7 @@ def generate_data(duration_hours=24, position_step_sec=30, output_path='orbital_
     print(f"Duration: {duration_hours} hours")
     print(f"Position step: {position_step_sec} seconds")
     print(f"Min elevation: {MIN_ELEVATION} deg")
+    print(f"Satellites: {len(TRACKED_SATS)}")
     print()
 
     matched_sats, ts = fetch_tles()
@@ -397,13 +464,13 @@ def generate_data(duration_hours=24, position_step_sec=30, output_path='orbital_
 
     satellites_data = {}
 
-    for sat_name, sat_info in NOAA_SATS.items():
+    for sat_name, sat_info in TRACKED_SATS.items():
         if sat_name not in matched_sats:
-            print(f"[{sat_name}] Skipping - not found in TLE data")
+            print(f"[{sat_name}] Skipping - not in TLE data")
             continue
 
         satellite = matched_sats[sat_name]
-        print(f"[{sat_name}] Propagating positions...")
+        print(f"[{sat_name}] Propagating...")
 
         positions = propagate_positions(
             satellite, ts, observer,
@@ -414,15 +481,18 @@ def generate_data(duration_hours=24, position_step_sec=30, output_path='orbital_
         print(f"[{sat_name}] Finding passes...")
         passes = find_passes(
             satellite, sat_name, ts, observer,
-            t_start_tt, duration_hours
+            t_start_tt, duration_hours,
+            freq_hz=sat_info['freq_hz']
         )
-        print(f"  {len(passes)} passes found")
+        print(f"  {len(passes)} passes")
 
         for i, p in enumerate(passes):
+            dop_str = ""
+            if p.get('doppler'):
+                dop_str = (f" | Doppler: {p['doppler']['min_doppler_hz']:.0f} to "
+                           f"+{p['doppler']['max_doppler_hz']:.0f} Hz")
             print(f"    Pass {i+1}: {p['aos_utc'][:16]} -> {p['los_utc'][11:16]} "
-                  f"| Max El: {p['max_el']} deg | Dur: {p['duration_sec']/60:.1f}min "
-                  f"| Doppler: {p['doppler']['min_doppler_hz']:.0f} to "
-                  f"+{p['doppler']['max_doppler_hz']:.0f} Hz")
+                  f"| Max El: {p['max_el']} deg | Dur: {p['duration_sec']/60:.1f}min{dop_str}")
 
         inc = satellite.model.inclo * 180.0 / math.pi
         period_min = 2.0 * math.pi / satellite.model.no_kozai
@@ -432,8 +502,9 @@ def generate_data(duration_hours=24, position_step_sec=30, output_path='orbital_
             'tle_name': satellite.name,
             'norad_id': satellite.model.satnum,
             'freq_hz': sat_info['freq_hz'],
-            'freq_mhz': round(sat_info['freq_hz'] / 1e6, 4),
+            'freq_mhz': round(sat_info['freq_hz'] / 1e6, 4) if sat_info['freq_hz'] else None,
             'color': sat_info['color'],
+            'role': sat_info['role'],
             'epoch': satellite.epoch.utc_datetime().isoformat(),
             'inclination_deg': round(inc, 2),
             'period_min': round(period_min, 2),
@@ -459,9 +530,17 @@ def generate_data(duration_hours=24, position_step_sec=30, output_path='orbital_
     total_passes = sum(len(s['passes']) for s in satellites_data.values())
     total_positions = sum(len(s['positions']) for s in satellites_data.values())
 
+    # Summary by role
+    by_role = {}
+    for s in satellites_data.values():
+        r = s['role']
+        by_role[r] = by_role.get(r, 0) + 1
+
     print(f"\n{'='*60}")
-    print(f"Summary: {len(satellites_data)} sats, {total_passes} passes, "
+    print(f"Summary: {len(satellites_data)} satellites, {total_passes} passes, "
           f"{total_positions} position samples")
+    for role, count in sorted(by_role.items()):
+        print(f"  {role}: {count} sats")
 
     with open(output_path, 'w') as f:
         json.dump(output, f, separators=(',', ':'))
@@ -482,8 +561,6 @@ Examples:
   python generate_orbital_data.py                        # 24h, 30s steps
   python generate_orbital_data.py --hours 48 --step 60   # 48h, 1-min steps
   python generate_orbital_data.py -o viz_data.json       # Custom output
-
-Output JSON is consumed by satellite-viz.html
 """
     )
     parser.add_argument('--hours', type=float, default=24,

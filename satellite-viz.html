@@ -185,7 +185,7 @@
 </div>
 
 <div class="controls-hint">
-  <kbd>DRAG</kbd> rotate &nbsp; <kbd>SCROLL</kbd> zoom &nbsp; <kbd>1-4</kbd> focus sat &nbsp; <kbd>+</kbd><kbd>-</kbd> time warp &nbsp; <kbd>R</kbd> reset
+  <kbd>DRAG</kbd> rotate &nbsp; <kbd>SCROLL</kbd> zoom &nbsp; <kbd>1-9</kbd> focus sat &nbsp; <kbd>+</kbd><kbd>-</kbd> time warp &nbsp; <kbd>R</kbd> reset
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -633,7 +633,7 @@ function onResize() {
 }
 
 function onKeyDown(e) {
-    const numKeys = ['1','2','3','4'];
+    const numKeys = ['1','2','3','4','5','6','7','8','9','0'];
     const idx = numKeys.indexOf(e.key);
     if (idx >= 0 && idx < satKeys.length) { focusSat = focusSat === idx ? -1 : idx; updateSatListUI(); }
     else if (e.key === '+' || e.key === '=') { timeWarp = Math.min(timeWarp * 2, 512); updateTimeWarpUI(); }
@@ -663,19 +663,24 @@ function buildUI() {
     if (dataMode === 'live') { src.className = 'data-source live'; src.textContent = `SKYFIELD SGP4 • ${new Date(orbitalData.generated_utc).toUTCString().slice(0,22)}`; }
     else { src.className = 'data-source demo'; src.textContent = 'DEMO MODE • Run generate_orbital_data.py for real data'; }
 
-    // Build satellite list
+    // Build satellite list sorted by role
     const container = document.getElementById('sat-list');
     container.innerHTML = '';
     satKeys.forEach((name, i) => {
         const sat = orbitalData.satellites[name];
+        const role = sat.role || 'display';
+        const roleLabel = role === 'primary' ? 'PRIMARY' : role === 'weather' ? 'WX' : '';
+        const freqStr = sat.freq_mhz ? `${sat.freq_mhz} MHz` : `NORAD ${sat.norad_id}`;
+        const detailStr = `${freqStr} • ${sat.inclination_deg}° inc • ${sat.period_min}min`;
+
         const div = document.createElement('div');
         div.className = 'sat-item'; div.id = `sat-item-${i}`;
         div.onclick = () => { focusSat = focusSat === i ? -1 : i; updateSatListUI(); };
         div.innerHTML = `
             <div class="sat-dot" style="background:${sat.color};box-shadow:0 0 8px ${sat.color}"></div>
             <div class="sat-info">
-                <div class="sat-name">${sat.name}</div>
-                <div class="sat-freq">${sat.freq_mhz} MHz • ${sat.inclination_deg}° inc • ${sat.period_min}min</div>
+                <div class="sat-name">${sat.name}${roleLabel ? ` <span style="font-size:9px;color:${role === 'primary' ? 'var(--success)' : 'var(--text-dim)'};font-family:JetBrains Mono,monospace;letter-spacing:1px;">${roleLabel}</span>` : ''}</div>
+                <div class="sat-freq">${detailStr}</div>
             </div>
             <div class="sat-status below" id="sat-status-${i}">BELOW</div>`;
         container.appendChild(div);
@@ -710,8 +715,9 @@ function updateStatsUI() {
     if (ageSec < 3600) document.getElementById('data-age').textContent = `${Math.floor(ageSec/60)}m`;
     else document.getElementById('data-age').textContent = `${(ageSec/3600).toFixed(1)}h`;
 
-    // Find next pass across all satellites
+    // Find next pass across all satellites (prefer primary/weather for Doppler display)
     let nextPass = null, nextSatName = null, nextSatIdx = -1;
+    let nextPassDoppler = null, nextSatNameDoppler = null;
     satKeys.forEach((name, i) => {
         const satData = orbitalData.satellites[name];
         for (const p of satData.passes) {
@@ -719,6 +725,13 @@ function updateStatsUI() {
             if (aosUnix > simTimeUnix || (p.los_unix > simTimeUnix && aosUnix <= simTimeUnix)) {
                 if (!nextPass || aosUnix < (nextPass.aos_unix || Infinity)) {
                     nextPass = p; nextSatName = name; nextSatIdx = i;
+                }
+                // Track the next pass that has Doppler data separately
+                const role = satData.role || 'display';
+                if (p.doppler && (role === 'primary' || role === 'weather')) {
+                    if (!nextPassDoppler || aosUnix < (nextPassDoppler.aos_unix || Infinity)) {
+                        nextPassDoppler = p; nextSatNameDoppler = name;
+                    }
                 }
                 break;
             }
@@ -746,8 +759,11 @@ function updateStatsUI() {
 
         // Timeline
         updatePassTimeline(nextPass, nextSatName);
-        drawElevChart(nextPass);
-        drawDopplerChart(nextPass);
+        // Use the Doppler-capable pass for charts if available, else next pass
+        const chartPass = nextPassDoppler || nextPass;
+        const chartSatName = nextSatNameDoppler || nextSatName;
+        drawElevChart(chartPass, chartSatName);
+        drawDopplerChart(chartPass, chartSatName);
     }
 }
 
@@ -773,7 +789,7 @@ function updatePassTimeline(pass, satName) {
         </div>`;
 }
 
-function drawElevChart(pass) {
+function drawElevChart(pass, satName) {
     const canvas = document.getElementById('elev-canvas');
     const ctx = canvas.getContext('2d');
     const w = canvas.width, h = canvas.height;
@@ -794,13 +810,7 @@ function drawElevChart(pass) {
         ctx.fillText(y + '°', 2, py - 2);
     }
 
-    // Find sat color
-    let color = '#38bdf8';
-    for (const name of satKeys) {
-        for (const p of orbitalData.satellites[name].passes) {
-            if (p.aos_unix === pass.aos_unix) { color = orbitalData.satellites[name].color; break; }
-        }
-    }
+    const color = satName && orbitalData.satellites[satName] ? orbitalData.satellites[satName].color : '#38bdf8';
 
     // Draw elevation curve
     ctx.beginPath(); ctx.strokeStyle = color; ctx.lineWidth = 1.5;
@@ -823,7 +833,7 @@ function drawElevChart(pass) {
     ctx.fillText('10° MIN', w - 40, threshY - 3);
 }
 
-function drawDopplerChart(pass) {
+function drawDopplerChart(pass, satName) {
     const canvas = document.getElementById('doppler-canvas');
     const ctx = canvas.getContext('2d');
     const w = canvas.width, h = canvas.height;
@@ -831,7 +841,7 @@ function drawDopplerChart(pass) {
 
     if (!pass.doppler || !pass.doppler.doppler_hz || pass.doppler.doppler_hz.length === 0) {
         ctx.fillStyle = 'rgba(100,116,139,0.5)'; ctx.font = '10px JetBrains Mono';
-        ctx.fillText('No Doppler data (demo mode)', 20, h/2);
+        ctx.fillText('No Doppler data', 20, h/2);
         return;
     }
 
@@ -847,13 +857,7 @@ function drawDopplerChart(pass) {
     ctx.fillText(`+${(maxD/1000).toFixed(1)}k`, 2, 10);
     ctx.fillText(`${(-maxD/1000).toFixed(1)}k`, 2, h - 4);
 
-    // Doppler curve
-    let color = '#38bdf8';
-    for (const name of satKeys) {
-        for (const p of orbitalData.satellites[name].passes) {
-            if (p.aos_unix === pass.aos_unix) { color = orbitalData.satellites[name].color; break; }
-        }
-    }
+    const color = satName && orbitalData.satellites[satName] ? orbitalData.satellites[satName].color : '#38bdf8';
 
     ctx.beginPath(); ctx.strokeStyle = color; ctx.lineWidth = 1.5;
     dData.forEach((d, i) => {
@@ -958,6 +962,13 @@ async function init() {
     await loadOrbitalData();
 
     satKeys = Object.keys(orbitalData.satellites);
+    // Sort: primary first, then weather, then display
+    const rolePriority = { primary: 0, weather: 1, display: 2 };
+    satKeys.sort((a, b) => {
+        const ra = rolePriority[orbitalData.satellites[a].role] ?? 2;
+        const rb = rolePriority[orbitalData.satellites[b].role] ?? 2;
+        return ra - rb;
+    });
     simTimeUnix = Date.now() / 1000;
 
     document.getElementById('loading-text').textContent = 'INITIALIZING 3D ENGINE';
