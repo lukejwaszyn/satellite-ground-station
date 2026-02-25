@@ -1,0 +1,974 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SATCOM // Orbital Pass Visualizer</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Outfit:wght@200;300;400;600;700&display=swap');
+
+  :root {
+    --bg: #0a0c10;
+    --panel: rgba(12, 16, 24, 0.88);
+    --border: rgba(56, 189, 248, 0.12);
+    --accent: #38bdf8;
+    --accent-dim: rgba(56, 189, 248, 0.3);
+    --accent-glow: rgba(56, 189, 248, 0.08);
+    --warn: #f59e0b;
+    --success: #34d399;
+    --danger: #f87171;
+    --text: #e2e8f0;
+    --text-dim: #64748b;
+    --text-bright: #f8fafc;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Outfit', sans-serif;
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+  }
+
+  #canvas-container { position: fixed; inset: 0; z-index: 0; }
+  canvas { display: block; }
+
+  .scanlines {
+    position: fixed; inset: 0;
+    pointer-events: none; z-index: 1;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
+  }
+
+  /* ---------- Top bar ---------- */
+  .top-bar {
+    position: fixed; top: 0; left: 0; right: 0; height: 48px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px;
+    background: linear-gradient(180deg, rgba(10,12,16,0.95) 0%, transparent 100%);
+    z-index: 10; border-bottom: 1px solid var(--border);
+  }
+  .logo { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 14px; letter-spacing: 4px; color: var(--accent); text-shadow: 0 0 20px var(--accent-dim); }
+  .logo span { color: var(--text-dim); font-weight: 300; }
+  .top-bar-right { display: flex; align-items: center; gap: 20px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-dim); }
+  .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); box-shadow: 0 0 8px var(--success); display: inline-block; margin-right: 6px; animation: pulse-dot 2s infinite; }
+  @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  /* ---------- Panels ---------- */
+  .side-panel { position: fixed; top: 60px; left: 16px; width: 310px; z-index: 10; display: flex; flex-direction: column; gap: 12px; max-height: calc(100vh - 120px); overflow-y: auto; scrollbar-width: none; }
+  .side-panel::-webkit-scrollbar { display: none; }
+  .right-panel { position: fixed; top: 60px; right: 16px; width: 290px; z-index: 10; display: flex; flex-direction: column; gap: 12px; max-height: calc(100vh - 120px); overflow-y: auto; scrollbar-width: none; }
+  .right-panel::-webkit-scrollbar { display: none; }
+
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px; backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
+  .panel-header { font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 2px; color: var(--text-dim); text-transform: uppercase; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  .panel-header::before { content: ''; width: 8px; height: 2px; background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+
+  /* ---------- GS info ---------- */
+  .gs-name { font-size: 18px; font-weight: 600; color: var(--text-bright); margin-bottom: 4px; }
+  .gs-coords { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-dim); margin-bottom: 12px; }
+  .gs-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .stat-box { background: rgba(56,189,248,0.04); border: 1px solid var(--border); border-radius: 6px; padding: 10px; }
+  .stat-label { font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 1px; color: var(--text-dim); text-transform: uppercase; margin-bottom: 4px; }
+  .stat-value { font-family: 'JetBrains Mono', monospace; font-size: 16px; font-weight: 700; color: var(--text-bright); }
+  .stat-value.accent { color: var(--accent); }
+  .stat-value.warn { color: var(--warn); }
+  .stat-value.success { color: var(--success); }
+
+  /* ---------- Satellite list ---------- */
+  .sat-item { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 6px; margin-bottom: 4px; cursor: pointer; transition: all 0.2s; border: 1px solid transparent; }
+  .sat-item:hover { background: var(--accent-glow); border-color: var(--border); }
+  .sat-item.active { background: var(--accent-glow); border-color: var(--accent-dim); }
+  .sat-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .sat-info { flex: 1; }
+  .sat-name { font-size: 13px; font-weight: 500; color: var(--text-bright); }
+  .sat-freq { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-dim); }
+  .sat-status { font-family: 'JetBrains Mono', monospace; font-size: 10px; padding: 2px 8px; border-radius: 4px; white-space: nowrap; }
+  .sat-status.visible { background: rgba(52,211,153,0.15); color: var(--success); border: 1px solid rgba(52,211,153,0.3); }
+  .sat-status.below { background: rgba(100,116,139,0.15); color: var(--text-dim); border: 1px solid rgba(100,116,139,0.2); }
+
+  /* ---------- Pass timeline ---------- */
+  .pass-timeline { position: relative; padding-left: 16px; border-left: 2px solid var(--border); }
+  .pass-event { position: relative; margin-bottom: 16px; padding-left: 12px; }
+  .pass-event::before { content: ''; position: absolute; left: -21px; top: 4px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--accent); background: var(--bg); }
+  .pass-event.active::before { background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+  .pass-event-time { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--accent); font-weight: 500; }
+  .pass-event-label { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+  .pass-event-detail { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text); margin-top: 2px; }
+
+  /* ---------- Data source badge ---------- */
+  .data-source { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--text-dim); padding: 4px 8px; background: rgba(56,189,248,0.05); border: 1px solid var(--border); border-radius: 4px; text-align: center; margin-top: 8px; }
+  .data-source.live { color: var(--success); border-color: rgba(52,211,153,0.3); }
+  .data-source.demo { color: var(--warn); border-color: rgba(245,158,11,0.3); }
+
+  /* ---------- Time warp ---------- */
+  .time-warp { position: fixed; top: 56px; left: 50%; transform: translateX(-50%); z-index: 15; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--warn); background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.3); border-radius: 6px; padding: 6px 16px; display: none; align-items: center; gap: 8px; }
+  .time-warp.active { display: flex; }
+
+  /* ---------- Bottom bar ---------- */
+  .bottom-bar { position: fixed; bottom: 0; left: 0; right: 0; height: 36px; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; background: linear-gradient(0deg, rgba(10,12,16,0.95) 0%, transparent 100%); z-index: 10; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-dim); border-top: 1px solid var(--border); }
+  .bottom-bar .utc-clock { color: var(--accent); font-weight: 500; }
+
+  .controls-hint { position: fixed; bottom: 48px; left: 50%; transform: translateX(-50%); z-index: 10; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-dim); background: var(--panel); border: 1px solid var(--border); border-radius: 20px; padding: 6px 16px; backdrop-filter: blur(10px); opacity: 0.7; pointer-events: none; }
+  kbd { display: inline-block; background: rgba(56,189,248,0.1); border: 1px solid var(--border); border-radius: 3px; padding: 1px 5px; font-size: 9px; margin: 0 2px; }
+
+  /* ---------- Loading ---------- */
+  .loading { position: fixed; inset: 0; background: var(--bg); z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity 0.8s, visibility 0.8s; }
+  .loading.done { opacity: 0; visibility: hidden; }
+  .loading-logo { font-family: 'JetBrains Mono', monospace; font-size: 28px; font-weight: 700; letter-spacing: 8px; color: var(--text-bright); text-shadow: 0 0 40px var(--accent-dim); }
+  .loading-text { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--accent); letter-spacing: 3px; margin-top: 24px; animation: blink 1s infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  @media (max-width: 1000px) { .side-panel, .right-panel { display: none; } }
+</style>
+</head>
+<body>
+
+<div class="loading" id="loading">
+  <div class="loading-logo">SATCOM</div>
+  <div class="loading-text" id="loading-text">LOADING ORBITAL DATA</div>
+</div>
+
+<div class="scanlines"></div>
+<div id="canvas-container"></div>
+
+<div class="top-bar">
+  <div class="logo">SATCOM <span>// ORBITAL PASS VISUALIZER</span></div>
+  <div class="top-bar-right">
+    <span><span class="status-dot"></span><span id="tracking-status">TRACKING</span></span>
+    <span id="sat-count">—</span>
+  </div>
+</div>
+
+<div class="side-panel">
+  <div class="panel">
+    <div class="panel-header">Ground Station</div>
+    <div class="gs-name" id="gs-name">State College, PA</div>
+    <div class="gs-coords" id="gs-coords">—</div>
+    <div class="gs-stats">
+      <div class="stat-box"><div class="stat-label">Passes 24h</div><div class="stat-value accent" id="passes-today">—</div></div>
+      <div class="stat-box"><div class="stat-label">Next Pass</div><div class="stat-value warn" id="next-pass-countdown">—</div></div>
+      <div class="stat-box"><div class="stat-label">Max Elev</div><div class="stat-value success" id="max-elev">—</div></div>
+      <div class="stat-box"><div class="stat-label">Data Age</div><div class="stat-value" id="data-age">—</div></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-header">Tracked Satellites</div>
+    <div id="sat-list"></div>
+    <div class="data-source" id="data-source">—</div>
+  </div>
+</div>
+
+<div class="right-panel">
+  <div class="panel">
+    <div class="panel-header">Next Visible Pass</div>
+    <div id="next-pass-info"><div class="pass-timeline" id="pass-timeline"><div style="color:var(--text-dim);font-size:12px;">Loading...</div></div></div>
+  </div>
+  <div class="panel">
+    <div class="panel-header">Elevation Profile</div>
+    <canvas id="elev-canvas" width="258" height="100"></canvas>
+  </div>
+  <div class="panel">
+    <div class="panel-header">Doppler Shift</div>
+    <canvas id="doppler-canvas" width="258" height="100"></canvas>
+  </div>
+</div>
+
+<div class="time-warp" id="time-warp">⚡ TIME WARP: <span id="warp-speed">1x</span></div>
+
+<div class="bottom-bar">
+  <span id="bottom-info">GS: 40.7934°N 77.8600°W • NOAA APT 137 MHz VHF</span>
+  <span class="utc-clock" id="utc-clock">—</span>
+</div>
+
+<div class="controls-hint">
+  <kbd>DRAG</kbd> rotate &nbsp; <kbd>SCROLL</kbd> zoom &nbsp; <kbd>1-4</kbd> focus sat &nbsp; <kbd>+</kbd><kbd>-</kbd> time warp &nbsp; <kbd>R</kbd> reset
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ============================================================
+// SATCOM — 3D Orbital Pass Visualizer
+// Consumes orbital_data.json from generate_orbital_data.py
+// ============================================================
+
+const DEG = Math.PI / 180;
+const EARTH_R_KM = 6371;
+
+// --- State ---
+let orbitalData = null;     // loaded JSON
+let satStates = {};         // per-satellite runtime state
+let satKeys = [];           // ordered satellite name keys
+
+let scene, camera, renderer;
+let earthMesh, gsMesh;
+let satMeshes = {};         // name → THREE.Group
+let orbitLines = {};        // name → THREE.Line (full orbit)
+let groundTracks = {};      // name → THREE.Line (ground track)
+
+let cameraAngle = { theta: -0.3, phi: 1.1, distance: 3.2 };
+let targetAngle = { ...cameraAngle };
+let mouse = { dragging: false, prevX: 0, prevY: 0 };
+let touchDist = 0;
+
+let timeWarp = 1;
+let simTimeUnix = Date.now() / 1000;  // current sim time as unix
+let focusSat = -1;
+let uiTimer = 0;
+let dataMode = 'demo';  // 'live' or 'demo'
+
+// ============================================================
+// Data loading
+// ============================================================
+
+async function loadOrbitalData() {
+    // Try loading real Skyfield-generated data
+    try {
+        const resp = await fetch('orbital_data.json');
+        if (resp.ok) {
+            orbitalData = await resp.json();
+            dataMode = 'live';
+            console.log('Loaded real orbital data:', Object.keys(orbitalData.satellites).length, 'satellites');
+            return true;
+        }
+    } catch (e) {
+        console.log('No orbital_data.json found, using demo mode');
+    }
+
+    // Generate demo data (simplified Keplerian)
+    orbitalData = generateDemoData();
+    dataMode = 'demo';
+    return true;
+}
+
+function generateDemoData() {
+    // Fallback: simplified orbital mechanics for demo without Python backend
+    const now = Date.now() / 1000;
+    const nowISO = new Date(now * 1000).toISOString();
+
+    const demoSats = {
+        'NOAA 15': { freq_hz: 137.62e6, freq_mhz: 137.62, color: '#f472b6', norad_id: 25338, inclination_deg: 98.73, period_min: 101.2, raan0: 45, meanAnomaly0: 0 },
+        'NOAA 18': { freq_hz: 137.9125e6, freq_mhz: 137.9125, color: '#38bdf8', norad_id: 28654, inclination_deg: 99.0, period_min: 102.1, raan0: 160, meanAnomaly0: 120 },
+        'NOAA 19': { freq_hz: 137.1e6, freq_mhz: 137.1, color: '#a78bfa', norad_id: 33591, inclination_deg: 99.2, period_min: 102.0, raan0: 280, meanAnomaly0: 240 },
+        'NOAA 20': { freq_hz: 137.1e6, freq_mhz: 137.1, color: '#34d399', norad_id: 43013, inclination_deg: 98.7, period_min: 101.4, raan0: 70, meanAnomaly0: 60 },
+    };
+
+    const satellites = {};
+    const durationHours = 24;
+    const stepSec = 30;
+    const numSteps = Math.floor(durationHours * 3600 / stepSec) + 1;
+
+    for (const [name, sat] of Object.entries(demoSats)) {
+        const positions = [];
+        const periodSec = sat.period_min * 60;
+        const inc = sat.inclination_deg * DEG;
+        const raan = sat.raan0 * DEG;
+        const ma0 = sat.meanAnomaly0 * DEG;
+        const altKm = 850;
+        const orbitR = EARTH_R_KM + altKm;
+        const earthRotRate = 2 * Math.PI / 86400;
+
+        for (let i = 0; i < numSteps; i++) {
+            const t = i * stepSec;
+            const M = ma0 + (2 * Math.PI / periodSec) * t;
+            const earthAngle = earthRotRate * t;
+
+            // Orbital plane position
+            const x_orb = orbitR * Math.cos(M);
+            const y_orb = orbitR * Math.sin(M);
+
+            // ECI
+            const x_eci = x_orb * Math.cos(raan) - y_orb * Math.cos(inc) * Math.sin(raan);
+            const y_eci = x_orb * Math.sin(raan) + y_orb * Math.cos(inc) * Math.cos(raan);
+            const z_eci = y_orb * Math.sin(inc);
+
+            // ECEF (rotate for Earth spin)
+            const x_ecef = x_eci * Math.cos(earthAngle) + y_eci * Math.sin(earthAngle);
+            const y_ecef = -x_eci * Math.sin(earthAngle) + y_eci * Math.cos(earthAngle);
+
+            const r = Math.sqrt(x_ecef * x_ecef + y_ecef * y_ecef + z_eci * z_eci);
+            const lat = Math.asin(z_eci / r) / DEG;
+            const lon = Math.atan2(y_ecef, x_ecef) / DEG;
+
+            // Approximate elevation from GS
+            const gsLat = 40.7934 * DEG, gsLon = -77.86 * DEG;
+            const gsX = EARTH_R_KM * Math.cos(gsLat) * Math.cos(gsLon);
+            const gsY = EARTH_R_KM * Math.cos(gsLat) * Math.sin(gsLon);
+            const gsZ = EARTH_R_KM * Math.sin(gsLat);
+            const dx = x_ecef - gsX, dy = y_ecef - gsY, dz = z_eci - gsZ;
+            const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+            const gsNorm = [gsX/EARTH_R_KM, gsY/EARTH_R_KM, gsZ/EARTH_R_KM];
+            const toSat = [dx/dist, dy/dist, dz/dist];
+            const dotP = gsNorm[0]*toSat[0] + gsNorm[1]*toSat[1] + gsNorm[2]*toSat[2];
+            const el = Math.asin(dotP) / DEG;
+
+            positions.push({
+                ts: Math.round(t * 10) / 10,
+                ecef: [Math.round(x_ecef*100)/100, Math.round(y_ecef*100)/100, Math.round(z_eci*100)/100],
+                lat: Math.round(lat * 1e4) / 1e4,
+                lon: Math.round(lon * 1e4) / 1e4,
+                alt_km: altKm,
+                el: Math.round(el * 100) / 100,
+                az: 0,
+                range_km: Math.round(dist * 10) / 10,
+            });
+        }
+
+        // Find demo passes (where elevation > 10)
+        const passes = [];
+        let inPass = false, currentPass = null;
+        for (let i = 0; i < positions.length; i++) {
+            const p = positions[i];
+            if (p.el > 10 && !inPass) {
+                inPass = true;
+                const aosDate = new Date((now + p.ts) * 1000);
+                currentPass = {
+                    aos_utc: aosDate.toISOString(), aos_unix: now + p.ts,
+                    aos_az: 0, max_el: p.el, tca_unix: now + p.ts, tca_utc: aosDate.toISOString(), tca_az: 0, tca_range_km: p.range_km,
+                    doppler: { times_sec: [], doppler_hz: [], elevations_deg: [], max_doppler_hz: 3200, min_doppler_hz: -3200 }
+                };
+            }
+            if (inPass && p.el > (currentPass.max_el || 0)) {
+                currentPass.max_el = Math.round(p.el * 10) / 10;
+                const tcaDate = new Date((now + p.ts) * 1000);
+                currentPass.tca_utc = tcaDate.toISOString();
+                currentPass.tca_unix = now + p.ts;
+                currentPass.tca_range_km = p.range_km;
+            }
+            if (inPass) {
+                currentPass.doppler.times_sec.push(p.ts - (currentPass.aos_unix - now));
+                currentPass.doppler.elevations_deg.push(p.el);
+                // Simplified Doppler estimate
+                const frac = (p.ts - (currentPass.aos_unix - now));
+                currentPass.doppler.doppler_hz.push(0);
+            }
+            if (p.el <= 10 && inPass) {
+                inPass = false;
+                const losDate = new Date((now + p.ts) * 1000);
+                currentPass.los_utc = losDate.toISOString();
+                currentPass.los_unix = now + p.ts;
+                currentPass.los_az = 0;
+                currentPass.duration_sec = Math.round(currentPass.los_unix - currentPass.aos_unix);
+                if (currentPass.duration_sec > 30) passes.push(currentPass);
+            }
+        }
+
+        satellites[name] = {
+            name, tle_name: name, norad_id: sat.norad_id,
+            freq_hz: sat.freq_hz, freq_mhz: sat.freq_mhz, color: sat.color,
+            epoch: nowISO, inclination_deg: sat.inclination_deg, period_min: sat.period_min,
+            positions, passes,
+        };
+    }
+
+    return {
+        generated_utc: nowISO, generated_unix: now,
+        duration_hours: 24, position_step_sec: 30,
+        ground_station: { name: 'State College, PA', lat: 40.7934, lon: -77.86, elevation_m: 376, min_elevation_deg: 10 },
+        satellites,
+    };
+}
+
+// ============================================================
+// Interpolation: find satellite position at arbitrary sim time
+// ============================================================
+
+function getSatPositionAtTime(satData, tUnix) {
+    const t0 = orbitalData.generated_unix;
+    const step = orbitalData.position_step_sec;
+    const elapsed = tUnix - t0;
+
+    if (elapsed < 0 || !satData.positions.length) return null;
+
+    const idx = elapsed / step;
+    const i0 = Math.floor(idx);
+    const frac = idx - i0;
+
+    if (i0 >= satData.positions.length - 1) {
+        return satData.positions[satData.positions.length - 1];
+    }
+    if (i0 < 0) return satData.positions[0];
+
+    const p0 = satData.positions[i0];
+    const p1 = satData.positions[i0 + 1];
+
+    // Linearly interpolate ECEF position
+    return {
+        ecef: [
+            p0.ecef[0] + (p1.ecef[0] - p0.ecef[0]) * frac,
+            p0.ecef[1] + (p1.ecef[1] - p0.ecef[1]) * frac,
+            p0.ecef[2] + (p1.ecef[2] - p0.ecef[2]) * frac,
+        ],
+        lat: p0.lat + (p1.lat - p0.lat) * frac,
+        lon: p0.lon + (p1.lon - p0.lon) * frac,
+        alt_km: p0.alt_km + (p1.alt_km - p0.alt_km) * frac,
+        el: p0.el + (p1.el - p0.el) * frac,
+        az: p0.az + (p1.az - p0.az) * frac,
+        range_km: p0.range_km + (p1.range_km - p0.range_km) * frac,
+    };
+}
+
+// Convert ECEF km to Three.js scene units (1 unit = EARTH_R_KM)
+function ecefToScene(ecef) {
+    return new THREE.Vector3(
+        ecef[0] / EARTH_R_KM,
+        ecef[2] / EARTH_R_KM,  // Three.js Y = Earth Z (north)
+        ecef[1] / EARTH_R_KM,
+    );
+}
+
+function latLonToScene(lat, lon, r) {
+    const phi = (90 - lat) * DEG;
+    const theta = (lon + 180) * DEG;
+    return new THREE.Vector3(
+        -r * Math.sin(phi) * Math.cos(theta),
+         r * Math.cos(phi),
+         r * Math.sin(phi) * Math.sin(theta),
+    );
+}
+
+// ============================================================
+// Three.js Scene Setup
+// ============================================================
+
+function initScene() {
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.01, 100);
+    updateCamera();
+
+    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setClearColor(0x0a0c10, 1);
+    document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+    createStars();
+    createEarth();
+    createGroundStation();
+
+    // Lighting
+    scene.add(new THREE.AmbientLight(0x334466, 0.6));
+    const sun = new THREE.DirectionalLight(0xfff5e6, 1.4);
+    sun.position.set(5, 3, 4);
+    scene.add(sun);
+    const rim = new THREE.DirectionalLight(0x38bdf8, 0.3);
+    rim.position.set(-3, -1, -2);
+    scene.add(rim);
+
+    // Create satellite meshes
+    for (const name of satKeys) {
+        const satData = orbitalData.satellites[name];
+        createSatelliteMesh(name, satData.color);
+        createOrbitLine(name, satData);
+    }
+
+    // Events
+    window.addEventListener('resize', onResize);
+    renderer.domElement.addEventListener('mousedown', e => { mouse.dragging = true; mouse.prevX = e.clientX; mouse.prevY = e.clientY; });
+    renderer.domElement.addEventListener('mousemove', e => {
+        if (!mouse.dragging) return;
+        targetAngle.theta -= (e.clientX - mouse.prevX) * 0.005;
+        targetAngle.phi = Math.max(0.1, Math.min(Math.PI - 0.1, targetAngle.phi - (e.clientY - mouse.prevY) * 0.005));
+        mouse.prevX = e.clientX; mouse.prevY = e.clientY;
+    });
+    renderer.domElement.addEventListener('mouseup', () => mouse.dragging = false);
+    renderer.domElement.addEventListener('wheel', e => {
+        targetAngle.distance = Math.max(1.5, Math.min(8, targetAngle.distance + e.deltaY * 0.002));
+    });
+    renderer.domElement.addEventListener('touchstart', e => {
+        if (e.touches.length === 1) { mouse.dragging = true; mouse.prevX = e.touches[0].clientX; mouse.prevY = e.touches[0].clientY; }
+        else if (e.touches.length === 2) { touchDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY); }
+        e.preventDefault();
+    }, { passive: false });
+    renderer.domElement.addEventListener('touchmove', e => {
+        if (e.touches.length === 1 && mouse.dragging) {
+            targetAngle.theta -= (e.touches[0].clientX - mouse.prevX) * 0.005;
+            targetAngle.phi = Math.max(0.1, Math.min(Math.PI - 0.1, targetAngle.phi - (e.touches[0].clientY - mouse.prevY) * 0.005));
+            mouse.prevX = e.touches[0].clientX; mouse.prevY = e.touches[0].clientY;
+        } else if (e.touches.length === 2) {
+            const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+            targetAngle.distance = Math.max(1.5, Math.min(8, targetAngle.distance - (d - touchDist) * 0.01));
+            touchDist = d;
+        }
+        e.preventDefault();
+    }, { passive: false });
+    renderer.domElement.addEventListener('touchend', () => mouse.dragging = false);
+    window.addEventListener('keydown', onKeyDown);
+}
+
+function createStars() {
+    const geo = new THREE.BufferGeometry();
+    const n = 3000;
+    const pos = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) {
+        const r = 40 + Math.random() * 40;
+        const th = Math.random() * Math.PI * 2;
+        const ph = Math.acos(2 * Math.random() - 1);
+        pos[i*3] = r * Math.sin(ph) * Math.cos(th);
+        pos[i*3+1] = r * Math.sin(ph) * Math.sin(th);
+        pos[i*3+2] = r * Math.cos(ph);
+    }
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    scene.add(new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xaabbdd, size: 0.08, sizeAttenuation: true, transparent: true, opacity: 0.8 })));
+}
+
+function createEarth() {
+    const geo = new THREE.SphereGeometry(1, 96, 64);
+    const can = document.createElement('canvas'); can.width = 1024; can.height = 512;
+    const ctx = can.getContext('2d');
+
+    // Dark ocean base
+    ctx.fillStyle = '#0d1520'; ctx.fillRect(0, 0, 1024, 512);
+
+    // Continents (simplified filled regions)
+    ctx.fillStyle = 'rgba(30, 58, 80, 0.7)';
+    const continents = [
+        [250,140,110,80,-0.2], [320,300,50,90,0.15], [520,130,50,40,0],
+        [530,270,55,85,0], [680,140,130,70,0], [790,330,50,35,0.3],
+    ];
+    continents.forEach(([x,y,rx,ry,rot]) => { ctx.beginPath(); ctx.ellipse(x,y,rx,ry,rot,0,Math.PI*2); ctx.fill(); });
+
+    // Antarctica
+    ctx.fillStyle = 'rgba(40, 70, 90, 0.4)'; ctx.fillRect(0, 470, 1024, 42);
+
+    // Grid
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.06)'; ctx.lineWidth = 0.5;
+    for (let i = 0; i <= 180; i += 15) { ctx.beginPath(); ctx.moveTo(0, i*512/180); ctx.lineTo(1024, i*512/180); ctx.stroke(); }
+    for (let i = 0; i <= 360; i += 15) { ctx.beginPath(); ctx.moveTo(i*1024/360, 0); ctx.lineTo(i*1024/360, 512); ctx.stroke(); }
+
+    // City lights
+    [[250,155],[230,135],[270,165],[210,150],[320,280],[310,310],[520,125],[505,140],[540,120],[530,250],[540,220],[650,130],[700,155],[720,170],[760,140],[790,325]].forEach(([x,y]) => {
+        ctx.fillStyle = 'rgba(245, 210, 120, 0.3)'; ctx.beginPath();
+        ctx.arc(x + Math.random()*20-10, y + Math.random()*20-10, 2 + Math.random()*3, 0, Math.PI*2); ctx.fill();
+    });
+
+    const tex = new THREE.CanvasTexture(can);
+    earthMesh = new THREE.Mesh(geo, new THREE.MeshPhongMaterial({ map: tex, specular: 0x111111, shininess: 15 }));
+    scene.add(earthMesh);
+
+    // Atmosphere
+    scene.add(new THREE.Mesh(new THREE.SphereGeometry(1.02, 64, 32), new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.04, side: THREE.BackSide })));
+    scene.add(new THREE.Mesh(new THREE.SphereGeometry(1.08, 32, 16), new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.02, side: THREE.BackSide })));
+}
+
+function createGroundStation() {
+    const gs = orbitalData.ground_station;
+    const pos = latLonToScene(gs.lat, gs.lon, 1.005);
+
+    gsMesh = new THREE.Mesh(new THREE.SphereGeometry(0.012, 16, 16), new THREE.MeshBasicMaterial({ color: 0xf59e0b }));
+    gsMesh.position.copy(pos);
+    scene.add(gsMesh);
+
+    // Pulse ring
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.015, 0.025, 32), new THREE.MeshBasicMaterial({ color: 0xf59e0b, transparent: true, opacity: 0.4, side: THREE.DoubleSide }));
+    ring.position.copy(pos); ring.lookAt(0, 0, 0);
+    scene.add(ring);
+
+    // Visibility cone
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.4, 32, 1, true), new THREE.MeshBasicMaterial({ color: 0xf59e0b, transparent: true, opacity: 0.03, side: THREE.DoubleSide }));
+    const normal = pos.clone().normalize();
+    cone.position.copy(pos.clone().add(normal.clone().multiplyScalar(0.2)));
+    cone.lookAt(pos.clone().add(normal.clone().multiplyScalar(2)));
+    cone.rotateX(Math.PI);
+    scene.add(cone);
+}
+
+function createSatelliteMesh(name, colorHex) {
+    const color = new THREE.Color(colorHex);
+    const group = new THREE.Group();
+
+    // Body
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, 0.01), new THREE.MeshPhongMaterial({ color: 0xcccccc, emissive: color, emissiveIntensity: 0.3 }));
+    group.add(body);
+
+    // Solar panels
+    const panelMat = new THREE.MeshPhongMaterial({ color: 0x1a3a5c, emissive: 0x0a1a2c });
+    const p1 = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.015, 0.001), panelMat); p1.position.x = 0.035; group.add(p1);
+    const p2 = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.015, 0.001), panelMat); p2.position.x = -0.035; group.add(p2);
+
+    // Glow
+    group.add(new THREE.Mesh(new THREE.SphereGeometry(0.008, 8, 8), new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.8 })));
+
+    scene.add(group);
+    satMeshes[name] = group;
+}
+
+function createOrbitLine(name, satData) {
+    // Full orbit from position data (take one orbital period worth of points)
+    const periodSec = (satData.period_min || 102) * 60;
+    const step = orbitalData.position_step_sec;
+    const pointsPerOrbit = Math.ceil(periodSec / step);
+    const numPoints = Math.min(pointsPerOrbit, satData.positions.length);
+
+    const points = [];
+    for (let i = 0; i < numPoints && i < satData.positions.length; i++) {
+        points.push(ecefToScene(satData.positions[i].ecef));
+    }
+    // Close the loop approximately
+    if (points.length > 2) points.push(points[0].clone());
+
+    const geo = new THREE.BufferGeometry().setFromPoints(points);
+    const color = new THREE.Color(satData.color);
+    const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: color, transparent: true, opacity: 0.1 }));
+    scene.add(line);
+    orbitLines[name] = line;
+}
+
+function updateCamera() {
+    camera.position.set(
+        cameraAngle.distance * Math.sin(cameraAngle.phi) * Math.sin(cameraAngle.theta),
+        cameraAngle.distance * Math.cos(cameraAngle.phi),
+        cameraAngle.distance * Math.sin(cameraAngle.phi) * Math.cos(cameraAngle.theta),
+    );
+    camera.lookAt(0, 0, 0);
+}
+
+function onResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+function onKeyDown(e) {
+    const numKeys = ['1','2','3','4'];
+    const idx = numKeys.indexOf(e.key);
+    if (idx >= 0 && idx < satKeys.length) { focusSat = focusSat === idx ? -1 : idx; updateSatListUI(); }
+    else if (e.key === '+' || e.key === '=') { timeWarp = Math.min(timeWarp * 2, 512); updateTimeWarpUI(); }
+    else if (e.key === '-' || e.key === '_') { timeWarp = Math.max(timeWarp / 2, 1); updateTimeWarpUI(); }
+    else if (e.key === 'r' || e.key === 'R') { focusSat = -1; targetAngle = { theta: -0.3, phi: 1.1, distance: 3.2 }; timeWarp = 1; updateTimeWarpUI(); updateSatListUI(); }
+}
+
+function updateTimeWarpUI() {
+    const el = document.getElementById('time-warp');
+    const sp = document.getElementById('warp-speed');
+    if (timeWarp > 1) { el.classList.add('active'); sp.textContent = timeWarp + 'x'; }
+    else { el.classList.remove('active'); }
+}
+
+// ============================================================
+// UI building
+// ============================================================
+
+function buildUI() {
+    const gs = orbitalData.ground_station;
+    document.getElementById('gs-name').textContent = gs.name;
+    document.getElementById('gs-coords').textContent = `${gs.lat}°N  ${Math.abs(gs.lon)}°W  ${gs.elevation_m}m ASL`;
+    document.getElementById('sat-count').textContent = `${satKeys.length} TARGETS`;
+    document.getElementById('bottom-info').textContent = `GS: ${gs.lat}°N ${Math.abs(gs.lon)}°W • NOAA APT 137 MHz VHF • Min El: ${gs.min_elevation_deg}°`;
+
+    const src = document.getElementById('data-source');
+    if (dataMode === 'live') { src.className = 'data-source live'; src.textContent = `SKYFIELD SGP4 • ${new Date(orbitalData.generated_utc).toUTCString().slice(0,22)}`; }
+    else { src.className = 'data-source demo'; src.textContent = 'DEMO MODE • Run generate_orbital_data.py for real data'; }
+
+    // Build satellite list
+    const container = document.getElementById('sat-list');
+    container.innerHTML = '';
+    satKeys.forEach((name, i) => {
+        const sat = orbitalData.satellites[name];
+        const div = document.createElement('div');
+        div.className = 'sat-item'; div.id = `sat-item-${i}`;
+        div.onclick = () => { focusSat = focusSat === i ? -1 : i; updateSatListUI(); };
+        div.innerHTML = `
+            <div class="sat-dot" style="background:${sat.color};box-shadow:0 0 8px ${sat.color}"></div>
+            <div class="sat-info">
+                <div class="sat-name">${sat.name}</div>
+                <div class="sat-freq">${sat.freq_mhz} MHz • ${sat.inclination_deg}° inc • ${sat.period_min}min</div>
+            </div>
+            <div class="sat-status below" id="sat-status-${i}">BELOW</div>`;
+        container.appendChild(div);
+    });
+}
+
+function updateSatListUI() {
+    satKeys.forEach((name, i) => {
+        const item = document.getElementById(`sat-item-${i}`);
+        const status = document.getElementById(`sat-status-${i}`);
+        const satData = orbitalData.satellites[name];
+        const pos = getSatPositionAtTime(satData, simTimeUnix);
+
+        item.className = `sat-item ${focusSat === i ? 'active' : ''}`;
+        if (pos && pos.el > orbitalData.ground_station.min_elevation_deg) {
+            status.className = 'sat-status visible';
+            status.textContent = `${pos.el.toFixed(0)}°`;
+        } else {
+            status.className = 'sat-status below';
+            status.textContent = 'BELOW';
+        }
+    });
+}
+
+function updateStatsUI() {
+    // UTC clock
+    const now = new Date(simTimeUnix * 1000);
+    document.getElementById('utc-clock').textContent = `UTC ${now.toISOString().replace('T', ' ').substring(0, 19)}`;
+
+    // Data age
+    const ageSec = simTimeUnix - orbitalData.generated_unix;
+    if (ageSec < 3600) document.getElementById('data-age').textContent = `${Math.floor(ageSec/60)}m`;
+    else document.getElementById('data-age').textContent = `${(ageSec/3600).toFixed(1)}h`;
+
+    // Find next pass across all satellites
+    let nextPass = null, nextSatName = null, nextSatIdx = -1;
+    satKeys.forEach((name, i) => {
+        const satData = orbitalData.satellites[name];
+        for (const p of satData.passes) {
+            const aosUnix = p.aos_unix;
+            if (aosUnix > simTimeUnix || (p.los_unix > simTimeUnix && aosUnix <= simTimeUnix)) {
+                if (!nextPass || aosUnix < (nextPass.aos_unix || Infinity)) {
+                    nextPass = p; nextSatName = name; nextSatIdx = i;
+                }
+                break;
+            }
+        }
+    });
+
+    // Total passes in 24h window
+    let totalPasses = 0;
+    satKeys.forEach(name => { totalPasses += orbitalData.satellites[name].passes.length; });
+    document.getElementById('passes-today').textContent = totalPasses;
+
+    // Next pass countdown
+    if (nextPass) {
+        const timeUntil = nextPass.aos_unix - simTimeUnix;
+        if (timeUntil <= 0) {
+            document.getElementById('next-pass-countdown').textContent = 'NOW';
+            document.getElementById('next-pass-countdown').className = 'stat-value success';
+        } else {
+            const mins = Math.floor(timeUntil / 60);
+            const hrs = Math.floor(mins / 60);
+            document.getElementById('next-pass-countdown').textContent = hrs > 0 ? `${hrs}h${mins%60}m` : `${mins}m`;
+            document.getElementById('next-pass-countdown').className = 'stat-value warn';
+        }
+        document.getElementById('max-elev').textContent = `${nextPass.max_el}°`;
+
+        // Timeline
+        updatePassTimeline(nextPass, nextSatName);
+        drawElevChart(nextPass);
+        drawDopplerChart(nextPass);
+    }
+}
+
+function updatePassTimeline(pass, satName) {
+    const sat = orbitalData.satellites[satName];
+    const fmt = iso => { const d = new Date(iso); return d.toUTCString().slice(17, 22) + ' UTC'; };
+
+    document.getElementById('pass-timeline').innerHTML = `
+        <div class="pass-event active">
+            <div class="pass-event-time">${fmt(pass.aos_utc)}</div>
+            <div class="pass-event-label">AOS — Acquisition of Signal</div>
+            <div class="pass-event-detail">${satName} • ${sat.freq_mhz} MHz • Az ${pass.aos_az}°</div>
+        </div>
+        <div class="pass-event">
+            <div class="pass-event-time">${fmt(pass.tca_utc)}</div>
+            <div class="pass-event-label">TCA — Max Elevation</div>
+            <div class="pass-event-detail">${pass.max_el}° above horizon • Range ${pass.tca_range_km} km</div>
+        </div>
+        <div class="pass-event">
+            <div class="pass-event-time">${fmt(pass.los_utc)}</div>
+            <div class="pass-event-label">LOS — Loss of Signal</div>
+            <div class="pass-event-detail">Duration: ${Math.floor(pass.duration_sec/60)}min ${Math.round(pass.duration_sec%60)}s • Az ${pass.los_az}°</div>
+        </div>`;
+}
+
+function drawElevChart(pass) {
+    const canvas = document.getElementById('elev-canvas');
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width, h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+
+    if (!pass.doppler || !pass.doppler.elevations_deg) return;
+
+    const elData = pass.doppler.elevations_deg;
+    const maxE = Math.max(...elData, 20);
+
+    // Grid
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.08)'; ctx.lineWidth = 0.5;
+    ctx.font = '8px JetBrains Mono'; ctx.fillStyle = 'rgba(100, 116, 139, 0.5)';
+    for (let y = 0; y <= 90; y += 30) {
+        const py = h - (y / maxE) * h * 0.9;
+        if (py < 0) continue;
+        ctx.beginPath(); ctx.moveTo(0, py); ctx.lineTo(w, py); ctx.stroke();
+        ctx.fillText(y + '°', 2, py - 2);
+    }
+
+    // Find sat color
+    let color = '#38bdf8';
+    for (const name of satKeys) {
+        for (const p of orbitalData.satellites[name].passes) {
+            if (p.aos_unix === pass.aos_unix) { color = orbitalData.satellites[name].color; break; }
+        }
+    }
+
+    // Draw elevation curve
+    ctx.beginPath(); ctx.strokeStyle = color; ctx.lineWidth = 1.5;
+    elData.forEach((el, i) => {
+        const x = (i / (elData.length - 1)) * w;
+        const y = h - (Math.max(0, el) / maxE) * h * 0.9;
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    // Fill
+    ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath();
+    ctx.fillStyle = color + '14'; ctx.fill();
+
+    // Min elevation threshold
+    const threshY = h - (10 / maxE) * h * 0.9;
+    ctx.strokeStyle = 'rgba(245, 158, 11, 0.3)'; ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(0, threshY); ctx.lineTo(w, threshY); ctx.stroke();
+    ctx.setLineDash([]); ctx.fillStyle = 'rgba(245, 158, 11, 0.5)'; ctx.font = '8px JetBrains Mono';
+    ctx.fillText('10° MIN', w - 40, threshY - 3);
+}
+
+function drawDopplerChart(pass) {
+    const canvas = document.getElementById('doppler-canvas');
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width, h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+
+    if (!pass.doppler || !pass.doppler.doppler_hz || pass.doppler.doppler_hz.length === 0) {
+        ctx.fillStyle = 'rgba(100,116,139,0.5)'; ctx.font = '10px JetBrains Mono';
+        ctx.fillText('No Doppler data (demo mode)', 20, h/2);
+        return;
+    }
+
+    const dData = pass.doppler.doppler_hz;
+    const maxD = Math.max(Math.abs(pass.doppler.max_doppler_hz), Math.abs(pass.doppler.min_doppler_hz), 100);
+
+    // Grid
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.08)'; ctx.lineWidth = 0.5;
+    ctx.font = '8px JetBrains Mono'; ctx.fillStyle = 'rgba(100, 116, 139, 0.5)';
+    const mid = h / 2;
+    ctx.beginPath(); ctx.moveTo(0, mid); ctx.lineTo(w, mid); ctx.stroke();
+    ctx.fillText('0 Hz', 2, mid - 3);
+    ctx.fillText(`+${(maxD/1000).toFixed(1)}k`, 2, 10);
+    ctx.fillText(`${(-maxD/1000).toFixed(1)}k`, 2, h - 4);
+
+    // Doppler curve
+    let color = '#38bdf8';
+    for (const name of satKeys) {
+        for (const p of orbitalData.satellites[name].passes) {
+            if (p.aos_unix === pass.aos_unix) { color = orbitalData.satellites[name].color; break; }
+        }
+    }
+
+    ctx.beginPath(); ctx.strokeStyle = color; ctx.lineWidth = 1.5;
+    dData.forEach((d, i) => {
+        const x = (i / (dData.length - 1)) * w;
+        const y = mid - (d / maxD) * (h * 0.45);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    // Zero-crossing marker
+    for (let i = 1; i < dData.length; i++) {
+        if ((dData[i-1] > 0 && dData[i] <= 0) || (dData[i-1] < 0 && dData[i] >= 0)) {
+            const x = (i / (dData.length - 1)) * w;
+            ctx.fillStyle = 'rgba(245, 158, 11, 0.8)';
+            ctx.beginPath(); ctx.arc(x, mid, 3, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = 'rgba(245, 158, 11, 0.5)'; ctx.font = '7px JetBrains Mono';
+            ctx.fillText('TCA', x - 6, mid + 12);
+            break;
+        }
+    }
+}
+
+// ============================================================
+// Animation Loop
+// ============================================================
+
+let lastTime = performance.now();
+
+function animate() {
+    requestAnimationFrame(animate);
+    const now = performance.now();
+    const dt = (now - lastTime) / 1000;
+    lastTime = now;
+
+    simTimeUnix += dt * timeWarp;
+
+    // Smooth camera
+    cameraAngle.theta += (targetAngle.theta - cameraAngle.theta) * 0.08;
+    cameraAngle.phi += (targetAngle.phi - cameraAngle.phi) * 0.08;
+    cameraAngle.distance += (targetAngle.distance - cameraAngle.distance) * 0.08;
+    updateCamera();
+
+    // Update satellite positions
+    satKeys.forEach((name, i) => {
+        const satData = orbitalData.satellites[name];
+        const pos = getSatPositionAtTime(satData, simTimeUnix);
+        if (!pos) return;
+
+        const scenePos = ecefToScene(pos.ecef);
+        satMeshes[name].position.copy(scenePos);
+        satMeshes[name].lookAt(0, 0, 0);
+
+        // Update orbit line with current positions (trail effect)
+        const trailPoints = [];
+        const step = orbitalData.position_step_sec;
+        const trailDuration = (satData.period_min || 102) * 60;  // one full orbit
+        const trailSteps = Math.floor(trailDuration / step);
+
+        for (let j = 0; j < trailSteps; j++) {
+            const tSample = simTimeUnix - trailDuration/2 + j * step;
+            const p = getSatPositionAtTime(satData, tSample);
+            if (p) trailPoints.push(ecefToScene(p.ecef));
+        }
+        if (trailPoints.length > 2) {
+            orbitLines[name].geometry.dispose();
+            orbitLines[name].geometry = new THREE.BufferGeometry().setFromPoints(trailPoints);
+        }
+    });
+
+    // Focus satellite
+    if (focusSat >= 0 && focusSat < satKeys.length) {
+        const sp = satMeshes[satKeys[focusSat]].position;
+        if (sp.lengthSq() > 0) {
+            const dir = sp.clone().normalize();
+            targetAngle.theta = Math.atan2(dir.x, dir.z);
+            targetAngle.phi = Math.acos(Math.max(-1, Math.min(1, dir.y)));
+            targetAngle.distance = 2.5;
+        }
+    }
+
+    // GS pulse
+    if (gsMesh) gsMesh.scale.setScalar(1 + 0.15 * Math.sin(now * 0.003));
+
+    // Throttled UI update
+    uiTimer += dt;
+    if (uiTimer > 0.5) {
+        uiTimer = 0;
+        updateStatsUI();
+        updateSatListUI();
+    }
+
+    renderer.render(scene, camera);
+}
+
+// ============================================================
+// Init
+// ============================================================
+
+async function init() {
+    document.getElementById('loading-text').textContent = 'LOADING ORBITAL DATA';
+
+    await loadOrbitalData();
+
+    satKeys = Object.keys(orbitalData.satellites);
+    simTimeUnix = Date.now() / 1000;
+
+    document.getElementById('loading-text').textContent = 'INITIALIZING 3D ENGINE';
+    initScene();
+    buildUI();
+
+    setTimeout(() => document.getElementById('loading').classList.add('done'), 800);
+    animate();
+}
+
+init();
+</script>
+</body>
+</html>
