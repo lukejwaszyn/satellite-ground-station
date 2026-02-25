@@ -61,25 +61,25 @@ NOAA_SATS = {
         'freq_hz': 137.6200e6,
         'color': '#f472b6',
         'norad_id': 25338,
-        'search_names': ['NOAA 15'],
+        'search_names': ['NOAA 15', 'NOAA-15', 'NOAA15'],
     },
     'NOAA 18': {
         'freq_hz': 137.9125e6,
         'color': '#38bdf8',
         'norad_id': 28654,
-        'search_names': ['NOAA 18'],
+        'search_names': ['NOAA 18', 'NOAA-18', 'NOAA18'],
     },
     'NOAA 19': {
         'freq_hz': 137.1000e6,
         'color': '#a78bfa',
         'norad_id': 33591,
-        'search_names': ['NOAA 19'],
+        'search_names': ['NOAA 19', 'NOAA-19', 'NOAA19'],
     },
     'NOAA 20': {
         'freq_hz': 137.1000e6,
         'color': '#34d399',
         'norad_id': 43013,
-        'search_names': ['NOAA 20', 'JPSS-1', 'NOAA 20 (JPSS-1)'],
+        'search_names': ['NOAA 20', 'NOAA-20', 'NOAA20', 'JPSS-1', 'JPSS 1'],
     },
 }
 
@@ -121,33 +121,50 @@ def fetch_tles(tle_file='weather.txt', max_age_hours=24):
     by_name = {sat.name: sat for sat in satellites}
     by_number = {sat.model.satnum: sat for sat in satellites}
 
+    # Helper: normalize a TLE name for fuzzy matching
+    # "NOAA 15 [B]" -> "NOAA 15", "NOAA 20 (JPSS-1)" -> "NOAA 20 JPSS-1"
+    def normalize(s):
+        return s.upper().replace('-', ' ').replace('[', '').replace(']', '').replace('(', '').replace(')', '').strip()
+
     matched = {}
     for display_name, info in NOAA_SATS.items():
+        # Strategy 1: NORAD catalog number (most reliable)
+        if info['norad_id'] in by_number:
+            sat = by_number[info['norad_id']]
+            matched[display_name] = sat
+            epoch_str = sat.epoch.utc_strftime('%Y-%m-%d %H:%M')
+            print(f"[TLE] Matched: {display_name} -> {sat.name} (NORAD {info['norad_id']}, epoch: {epoch_str})")
+            continue
+
+        # Strategy 2: Name matching with normalization
         found = False
         for search_name in info['search_names']:
+            norm_search = normalize(search_name)
             for tle_name, sat in by_name.items():
-                if search_name.upper() in tle_name.upper():
+                if norm_search in normalize(tle_name):
                     matched[display_name] = sat
                     epoch_str = sat.epoch.utc_strftime('%Y-%m-%d %H:%M')
-                    print(f"[TLE] Matched: {display_name} -> {sat.name} (epoch: {epoch_str})")
+                    print(f"[TLE] Matched: {display_name} -> {sat.name} (name match, epoch: {epoch_str})")
                     found = True
                     break
             if found:
                 break
 
-        if not found and info['norad_id'] in by_number:
-            sat = by_number[info['norad_id']]
-            matched[display_name] = sat
-            epoch_str = sat.epoch.utc_strftime('%Y-%m-%d %H:%M')
-            print(f"[TLE] Matched by NORAD ID: {display_name} -> {sat.name} (epoch: {epoch_str})")
+        if not found:
+            print(f"[TLE] WARNING: Could not match {display_name} (NORAD {info['norad_id']})")
 
     print(f"[TLE] Matched {len(matched)}/{len(NOAA_SATS)} NOAA satellites")
 
-    if not matched:
-        print("[TLE] ERROR: No NOAA satellites matched. Available NOAA entries:")
+    # Debug: show all NOAA-related entries in TLE file if any are missing
+    if len(matched) < len(NOAA_SATS):
+        print("[TLE] Available NOAA entries in TLE file:")
         for name in sorted(by_name.keys()):
             if 'NOAA' in name.upper():
-                print(f"  {name}")
+                sat = by_name[name]
+                print(f"  {name} (NORAD {sat.model.satnum})")
+
+    if not matched:
+        print("[TLE] ERROR: No NOAA satellites matched at all")
         sys.exit(1)
 
     return matched, ts
