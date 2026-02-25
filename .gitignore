@@ -33,3 +33,7 @@ data/decoded/*.jpgorbital_data.json
 weather.txt
 weather_noaa.txt
 tle_*.txt
+orbital_data.json
+weather.txt
+weather_noaa.txt
+tle_*.txt
