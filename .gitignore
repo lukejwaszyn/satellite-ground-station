@@ -29,4 +29,7 @@ weather.txt
 data/captures/*.bin
 data/captures/*.mat
 data/decoded/*.png
-data/decoded/*.jpg
+data/decoded/*.jpgorbital_data.json
+weather.txt
+weather_noaa.txt
+tle_*.txt

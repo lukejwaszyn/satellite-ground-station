@@ -91,9 +91,18 @@ def fetch_tles(tle_file='weather.txt', max_age_hours=24):
     """
     Fetch NOAA TLEs from Celestrak with caching.
     Mirrors schedule_captures.py TLE handling.
+
+    Uses multiple Celestrak sources because NOAA 15/18/19 were removed
+    from the 'weather' group but are still trackable by NORAD ID.
     """
     ts = load.timescale()
-    url = 'https://celestrak.org/NORAD/elements/gp.php?GROUP=weather&FORMAT=tle'
+
+    # Primary source: Celestrak weather group
+    weather_url = 'https://celestrak.org/NORAD/elements/gp.php?GROUP=weather&FORMAT=tle'
+    # Secondary source: NOAA group (sometimes includes older birds)
+    noaa_url = 'https://celestrak.org/NORAD/elements/gp.php?GROUP=noaa&FORMAT=tle'
+    # Tertiary: individual satellite lookups by NORAD ID
+    individual_url = 'https://celestrak.org/NORAD/elements/gp.php?CATNR={}&FORMAT=tle'
 
     need_fetch = True
     if os.path.exists(tle_file):
@@ -102,21 +111,60 @@ def fetch_tles(tle_file='weather.txt', max_age_hours=24):
             need_fetch = False
             print(f"[TLE] Using cached {tle_file} (age: {age_sec/3600:.1f}h)")
 
+    satellites = []
+
     if need_fetch:
-        print("[TLE] Fetching from Celestrak...")
+        # Fetch from weather group
+        print("[TLE] Fetching weather group from Celestrak...")
         try:
-            satellites = load.tle_file(url, filename=tle_file, reload=True)
-            print(f"[TLE] Downloaded {len(satellites)} weather satellites")
+            weather_sats = load.tle_file(weather_url, filename=tle_file, reload=True)
+            satellites.extend(weather_sats)
+            print(f"[TLE] Weather group: {len(weather_sats)} satellites")
         except Exception as e:
-            print(f"[TLE] Fetch failed: {e}")
+            print(f"[TLE] Weather group fetch failed: {e}")
+
+        # Fetch from NOAA group
+        print("[TLE] Fetching NOAA group from Celestrak...")
+        try:
+            noaa_file = tle_file.replace('.txt', '_noaa.txt')
+            noaa_sats = load.tle_file(noaa_url, filename=noaa_file, reload=True)
+            satellites.extend(noaa_sats)
+            print(f"[TLE] NOAA group: {len(noaa_sats)} satellites")
+        except Exception as e:
+            print(f"[TLE] NOAA group fetch failed: {e}")
+
+        # Fetch any missing satellites individually by NORAD ID
+        seen_norad = {sat.model.satnum for sat in satellites}
+        for sat_name, info in NOAA_SATS.items():
+            if info['norad_id'] not in seen_norad:
+                print(f"[TLE] Fetching {sat_name} individually (NORAD {info['norad_id']})...")
+                try:
+                    url = individual_url.format(info['norad_id'])
+                    ind_file = f"tle_{info['norad_id']}.txt"
+                    ind_sats = load.tle_file(url, filename=ind_file, reload=True)
+                    satellites.extend(ind_sats)
+                    print(f"[TLE] Got {len(ind_sats)} entry for {sat_name}")
+                except Exception as e:
+                    print(f"[TLE] Individual fetch for {sat_name} failed: {e}")
+
+        if not satellites:
             if os.path.exists(tle_file):
-                print(f"[TLE] Falling back to cached {tle_file}")
+                print(f"[TLE] All fetches failed, falling back to cached {tle_file}")
                 satellites = load.tle_file(tle_file)
             else:
                 print("[TLE] ERROR: No TLE data available")
                 sys.exit(1)
     else:
         satellites = load.tle_file(tle_file)
+        # Also load supplementary cached files if they exist
+        for suffix in ['_noaa.txt']:
+            supp = tle_file.replace('.txt', suffix)
+            if os.path.exists(supp):
+                satellites.extend(load.tle_file(supp))
+        for info in NOAA_SATS.values():
+            ind_file = f"tle_{info['norad_id']}.txt"
+            if os.path.exists(ind_file):
+                satellites.extend(load.tle_file(ind_file))
 
     by_name = {sat.name: sat for sat in satellites}
     by_number = {sat.model.satnum: sat for sat in satellites}
