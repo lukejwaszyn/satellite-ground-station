@@ -1,0 +1,197 @@
+[
+  {
+    "timestamp": "2026-02-27T00:05:26.714146+00:00",
+    "satellite": "METEOR-M2 3",
+    "max_elevation_deg": 10.9,
+    "status": "complete",
+    "capture_file": null,
+    "decoded_image": null,
+    "capture_success": false,
+    "error": "'aos_time'",
+    "completed": "2026-02-27T00:05:26.721705+00:00"
+  },
+  {
+    "timestamp": "2026-02-27T00:05:59.311228+00:00",
+    "satellite": "METEOR-M2 3",
+    "max_elevation_deg": 10.9,
+    "status": "complete",
+    "capture_file": null,
+    "decoded_image": null,
+    "capture_success": false,
+    "error": "'aos_time'",
+    "completed": "2026-02-27T00:05:59.311488+00:00"
+  },
+  {
+    "timestamp": "2026-02-27T00:08:19.580849+00:00",
+    "satellite": "METEOR-M2 3",
+    "max_elevation_deg": 10.9,
+    "status": "complete",
+    "capture_file": null,
+    "decoded_image": null,
+    "capture_success": false,
+    "error": "'aos_time'",
+    "completed": "2026-02-27T00:08:19.581283+00:00"
+  },
+  {
+    "timestamp": "2026-02-27T00:08:44.261938+00:00",
+    "satellite": "NOAA 15",
+    "max_elevation_deg": 13.1,
+    "status": "complete",
+    "capture_file": null,
+    "decoded_image": null,
+    "capture_success": false,
+    "error": "'aos_time'",
+    "completed": "2026-02-27T00:08:44.262348+00:00"
+  },
+  {
+    "timestamp": "2026-02-27T01:16:38.130695+00:00",
+    "satellite": "NOAA 19",
+    "max_elevation_deg": 16.6,
+    "status": "complete",
+    "capture_file": null,
+    "decoded_image": null,
+    "capture_success": false,
+    "error": "'aos_time'",
+    "completed": "2026-02-27T01:16:38.136125+00:00"
+  },
+  {
+    "timestamp": "2026-02-27T01:17:02.911297+00:00",
+    "satellite": "METEOR-M2 3",
+    "max_elevation_deg": 80.1,
+    "status": "complete",
+    "capture_file": null,
+    "decoded_image": null,
+    "capture_success": false,
+    "error": "'aos_time'",
+    "completed": "2026-02-27T01:17:02.911642+00:00"
+  },
+  {
+    "timestamp": "2026-02-27T01:23:15.946601+00:00",
+    "satellite": "METEOR-M2 3",
+    "max_elevation_deg": 80.1,
+    "status": "complete",
+    "capture_file": null,
+    "decoded_image": null,
+    "capture_success": false,
+    "error": "'aos_time'",
+    "completed": "2026-02-27T01:23:15.950193+00:00"
+  },
+  {
+    "timestamp": "2026-02-27T01:48:57.162060+00:00",
+    "satellite": "METEOR-M2 3",
+    "max_elevation_deg": 80.1,
+    "status": "complete",
+    "capture_file": null,
+    "decoded_image": null,
+    "capture_success": false,
+    "error": "'NoneType' object has no attribute 'items'",
+    "completed": "2026-02-27T01:48:57.172615+00:00"
+  },
+  {
+    "timestamp": "2026-02-27T01:49:02.848068+00:00",
+    "satellite": "METEOR-M2 3",
+    "max_elevation_deg": 80.1,
+    "status": "complete",
+    "capture_file": null,
+    "decoded_image": null,
+    "capture_success": false,
+    "error": "'NoneType' object has no attribute 'items'",
+    "completed": "2026-02-27T01:49:02.848588+00:00"
+  },
+  {
+    "timestamp": "2026-02-27T01:49:12.295635+00:00",
+    "satellite": "METEOR-M2 3",
+    "max_elevation_deg": 80.1,
+    "status": "complete",
+    "capture_file": null,
+    "decoded_image": null,
+    "capture_success": false,
+    "error": "'NoneType' object has no attribute 'items'",
+    "completed": "2026-02-27T01:49:12.296434+00:00"
+  },
+  {
+    "timestamp": "2026-02-27T01:49:26.529362+00:00",
+    "satellite": "METEOR-M2 3",
+    "max_elevation_deg": 80.1,
+    "status": "complete",
+    "capture_file": null,
+    "decoded_image": null,
+    "capture_success": false,
+    "error": "'NoneType' object has no attribute 'items'",
+    "completed": "2026-02-27T01:49:26.529913+00:00"
+  },
+  {
+    "timestamp": "2026-02-27T01:49:30.794112+00:00",
+    "satellite": "METEOR-M2 3",
+    "max_elevation_deg": 80.1,
+    "status": "complete",
+    "capture_file": null,
+    "decoded_image": null,
+    "capture_success": false,
+    "error": "'NoneType' object has no attribute 'items'",
+    "completed": "2026-02-27T01:49:30.794961+00:00"
+  },
+  {
+    "timestamp": "2026-02-27T01:49:46.795407+00:00",
+    "satellite": "METEOR-M2 3",
+    "max_elevation_deg": 80.1,
+    "status": "complete",
+    "capture_file": null,
+    "decoded_image": null,
+    "capture_success": false,
+    "error": "'NoneType' object has no attribute 'items'",
+    "completed": "2026-02-27T01:49:46.796379+00:00"
+  },
+  {
+    "timestamp": "2026-02-27T01:49:51.314378+00:00",
+    "satellite": "METEOR-M2 3",
+    "max_elevation_deg": 80.1,
+    "status": "complete",
+    "capture_file": null,
+    "decoded_image": null,
+    "capture_success": false,
+    "error": "'NoneType' object has no attribute 'items'",
+    "completed": "2026-02-27T01:49:51.315197+00:00"
+  },
+  {
+    "timestamp": "2026-02-27T02:57:27.750284+00:00",
+    "satellite": "NOAA 19",
+    "max_elevation_deg": 71.1,
+    "status": "complete",
+    "capture_file": null,
+    "decoded_image": null,
+    "capture_success": false,
+    "completed": "2026-02-27T02:57:28.185123+00:00"
+  },
+  {
+    "timestamp": "2026-02-27T02:57:55.465089+00:00",
+    "satellite": "NOAA 19",
+    "max_elevation_deg": 71.1,
+    "status": "complete",
+    "capture_file": null,
+    "decoded_image": null,
+    "capture_success": false,
+    "completed": "2026-02-27T02:57:55.486971+00:00"
+  },
+  {
+    "timestamp": "2026-02-27T02:58:02.563421+00:00",
+    "satellite": "NOAA 19",
+    "max_elevation_deg": 71.1,
+    "status": "complete",
+    "capture_file": null,
+    "decoded_image": null,
+    "capture_success": false,
+    "completed": "2026-02-27T02:58:02.589558+00:00"
+  },
+  {
+    "timestamp": "2026-02-27T03:28:00.330833+00:00",
+    "satellite": "NOAA 18",
+    "max_elevation_deg": 89.4,
+    "status": "complete",
+    "capture_file": "data/captures/NOAA_18_20260227_032439.bin",
+    "decoded_image": "NOAA_18_20260227_032439_decoded.png",
+    "capture_success": true,
+    "decode_success": true,
+    "completed": "2026-02-27T03:40:37.901227+00:00"
+  }
+]

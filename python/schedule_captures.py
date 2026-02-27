@@ -239,7 +239,6 @@ def execute_capture(pass_info, doppler_profile):
             '-g', str(int(CONFIG['capture_gain_db'])),
             '-d', str(int(duration_sec)),
             '-o', output_file,
-            '--doppler', doppler_file
         ]
     else:
         # Fall back to rtl_sdr command

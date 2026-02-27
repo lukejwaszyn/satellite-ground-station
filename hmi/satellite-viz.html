@@ -93,7 +93,11 @@
   .pass-timeline { position: relative; padding-left: 16px; border-left: 2px solid var(--border); }
   .pass-event { position: relative; margin-bottom: 16px; padding-left: 12px; }
   .pass-event::before { content: ''; position: absolute; left: -21px; top: 4px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--accent); background: var(--bg); }
-  .pass-event.active::before { background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+  .pass-event.active::before { background: var(--accent); box-shadow: 0 0 10px var(--accent); animation: pulse-dot 2s infinite; }
+  .pass-event.past::before { background: var(--accent-dim); border-color: var(--accent-dim); }
+  .pass-event.past .pass-event-time { opacity: 0.5; }
+  .pass-event.past .pass-event-label { opacity: 0.5; }
+  .pass-event.past .pass-event-detail { opacity: 0.5; }
   .pass-event-time { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--accent); font-weight: 500; }
   .pass-event-label { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
   .pass-event-detail { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text); margin-top: 2px; }
@@ -122,6 +126,33 @@
   @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
 
   @media (max-width: 1000px) { .side-panel, .right-panel { display: none; } }
+
+  /* ---------- Mission Control (inside right-panel, server mode only) ---------- */
+  .mission-ctrl { display: flex; flex-direction: column; gap: 12px; }
+  .mission-ctrl .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; backdrop-filter: blur(12px); }
+
+  .capture-btn {
+    width: 100%; padding: 10px 16px; border: 1px solid var(--success); border-radius: 8px;
+    background: rgba(52, 211, 153, 0.1); color: var(--success);
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600;
+    letter-spacing: 1px; cursor: pointer; transition: all 0.2s;
+    text-transform: uppercase;
+  }
+  .capture-btn:hover { background: rgba(52, 211, 153, 0.2); box-shadow: 0 0 20px rgba(52, 211, 153, 0.15); }
+  .capture-btn:disabled { opacity: 0.3; cursor: not-allowed; border-color: var(--text-dim); color: var(--text-dim); background: transparent; }
+  .capture-btn.capturing { border-color: var(--warn); color: var(--warn); background: rgba(245, 158, 11, 0.1); animation: pulse-capture 1.5s infinite; }
+  @keyframes pulse-capture { 0%,100%{ box-shadow: 0 0 8px rgba(245,158,11,0.2); } 50%{ box-shadow: 0 0 20px rgba(245,158,11,0.4); } }
+
+  .sdr-status { display: flex; align-items: center; gap: 8px; font-family: 'JetBrains Mono', monospace; font-size: 11px; margin-bottom: 8px; }
+  .sdr-dot { width: 8px; height: 8px; border-radius: 50%; }
+  .sdr-dot.connected { background: var(--success); box-shadow: 0 0 8px var(--success); }
+  .sdr-dot.disconnected { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
+
+  .mission-log-item { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-dim); padding: 6px 0; border-bottom: 1px solid var(--border); }
+  .mission-log-item:last-child { border-bottom: none; }
+  .mission-log-item .sat-name { color: var(--text); font-weight: 500; }
+  .mission-log-item .status-ok { color: var(--success); }
+  .mission-log-item .status-fail { color: var(--danger); }
 </style>
 </head>
 <body>
@@ -175,9 +206,29 @@
     <div class="panel-header">Doppler Shift</div>
     <canvas id="doppler-canvas" width="258" height="100"></canvas>
   </div>
+  <!-- Mission Control (visible in server mode only) -->
+  <div class="mission-ctrl" id="mission-panel" style="display:none;">
+    <div class="panel">
+      <div class="panel-header">Mission Control</div>
+      <div class="sdr-status">
+        <div class="sdr-dot disconnected" id="sdr-dot"></div>
+        <span id="sdr-status-text">SDR: Checking...</span>
+      </div>
+      <div id="capture-target" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-dim);margin-bottom:10px;">
+        No pass selected
+      </div>
+      <button class="capture-btn" id="capture-btn" disabled onclick="triggerCapture()">
+        ▶ Capture Next Pass
+      </button>
+    </div>
+    <div class="panel">
+      <div class="panel-header">Mission Log</div>
+      <div id="mission-log" style="max-height:200px;overflow-y:auto;scrollbar-width:none;">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text-dim);">No missions yet</div>
+      </div>
+    </div>
+  </div>
 </div>
-
-<div class="time-warp" id="time-warp">⚡ TIME WARP: <span id="warp-speed">1x</span></div>
 
 <div class="bottom-bar">
   <span id="bottom-info">GS: 40.7934°N 77.8600°W • NOAA APT 137 MHz VHF</span>
@@ -192,7 +243,7 @@
 <script>
 // ============================================================
 // SATCOM — 3D Orbital Pass Visualizer
-// Consumes orbital_data.json from generate_orbital_data.py
+// Consumes orbital data from satcom_server.py API or static orbital_data.json
 // ============================================================
 
 const DEG = Math.PI / 180;
@@ -219,19 +270,35 @@ let simTimeUnix = Date.now() / 1000;  // current sim time as unix
 let focusSat = -1;
 let uiTimer = 0;
 let dataMode = 'demo';  // 'live' or 'demo'
+let serverMode = false; // true when connected to satcom_server.py
 
 // ============================================================
 // Data loading
 // ============================================================
 
 async function loadOrbitalData() {
-    // Try loading real Skyfield-generated data
+    // Try loading from SATCOM server API first
+    try {
+        const resp = await fetch('/api/orbital-data');
+        if (resp.ok) {
+            orbitalData = await resp.json();
+            dataMode = 'live';
+            serverMode = true;
+            console.log('Loaded orbital data from SATCOM server:', Object.keys(orbitalData.satellites).length, 'satellites');
+            return true;
+        }
+    } catch (e) {
+        console.log('SATCOM server not available, trying static file...');
+    }
+
+    // Fallback: try static orbital_data.json (standalone mode)
     try {
         const resp = await fetch('orbital_data.json');
         if (resp.ok) {
             orbitalData = await resp.json();
             dataMode = 'live';
-            console.log('Loaded real orbital data:', Object.keys(orbitalData.satellites).length, 'satellites');
+            serverMode = false;
+            console.log('Loaded orbital data from static file:', Object.keys(orbitalData.satellites).length, 'satellites');
             return true;
         }
     } catch (e) {
@@ -241,6 +308,7 @@ async function loadOrbitalData() {
     // Generate demo data (simplified Keplerian)
     orbitalData = generateDemoData();
     dataMode = 'demo';
+    serverMode = false;
     return true;
 }
 
@@ -660,8 +728,9 @@ function buildUI() {
     document.getElementById('bottom-info').textContent = `GS: ${gs.lat}°N ${Math.abs(gs.lon)}°W • NOAA APT 137 MHz VHF • Min El: ${gs.min_elevation_deg}°`;
 
     const src = document.getElementById('data-source');
-    if (dataMode === 'live') { src.className = 'data-source live'; src.textContent = `SKYFIELD SGP4 • ${new Date(orbitalData.generated_utc).toUTCString().slice(0,22)}`; }
-    else { src.className = 'data-source demo'; src.textContent = 'DEMO MODE • Run generate_orbital_data.py for real data'; }
+    if (dataMode === 'live' && serverMode) { src.className = 'data-source live'; src.textContent = `SATCOM SERVER • SKYFIELD SGP4 • ${new Date(orbitalData.generated_utc).toUTCString().slice(0,22)}`; }
+    else if (dataMode === 'live') { src.className = 'data-source live'; src.textContent = `SKYFIELD SGP4 • ${new Date(orbitalData.generated_utc).toUTCString().slice(0,22)}`; }
+    else { src.className = 'data-source demo'; src.textContent = 'DEMO MODE • Run satcom_server.py for live tracking'; }
 
     // Build satellite list sorted by role
     const container = document.getElementById('sat-list');
@@ -770,19 +839,44 @@ function updateStatsUI() {
 function updatePassTimeline(pass, satName) {
     const sat = orbitalData.satellites[satName];
     const fmt = iso => { const d = new Date(iso); return d.toUTCString().slice(17, 22) + ' UTC'; };
+    
+    const now = simTimeUnix;
+    const aosUnix = pass.aos_unix;
+    const tcaUnix = pass.tca_unix;
+    const losUnix = pass.los_unix;
+    
+    // Determine state of each event
+    // past = event time has passed, active = currently in this phase, future = not yet
+    let aosState, tcaState, losState;
+    
+    if (now < aosUnix) {
+        // Before AOS — nothing active yet
+        aosState = 'future'; tcaState = 'future'; losState = 'future';
+    } else if (now < tcaUnix) {
+        // Between AOS and TCA — AOS passed, ascending
+        aosState = 'past'; tcaState = 'active'; losState = 'future';
+    } else if (now < losUnix) {
+        // Between TCA and LOS — descending
+        aosState = 'past'; tcaState = 'past'; losState = 'active';
+    } else {
+        // After LOS — pass complete
+        aosState = 'past'; tcaState = 'past'; losState = 'past';
+    }
+    
+    const stateClass = (s) => s === 'active' ? 'pass-event active' : s === 'past' ? 'pass-event past' : 'pass-event';
 
     document.getElementById('pass-timeline').innerHTML = `
-        <div class="pass-event active">
+        <div class="${stateClass(aosState)}">
             <div class="pass-event-time">${fmt(pass.aos_utc)}</div>
             <div class="pass-event-label">AOS — Acquisition of Signal</div>
-            <div class="pass-event-detail">${satName} • ${sat.freq_mhz} MHz • Az ${pass.aos_az}°</div>
+            <div class="pass-event-detail">${satName} • ${sat.freq_mhz ? sat.freq_mhz + ' MHz • ' : ''}Az ${pass.aos_az}°</div>
         </div>
-        <div class="pass-event">
+        <div class="${stateClass(tcaState)}">
             <div class="pass-event-time">${fmt(pass.tca_utc)}</div>
             <div class="pass-event-label">TCA — Max Elevation</div>
             <div class="pass-event-detail">${pass.max_el}° above horizon • Range ${pass.tca_range_km} km</div>
         </div>
-        <div class="pass-event">
+        <div class="${stateClass(losState)}">
             <div class="pass-event-time">${fmt(pass.los_utc)}</div>
             <div class="pass-event-label">LOS — Loss of Signal</div>
             <div class="pass-event-detail">Duration: ${Math.floor(pass.duration_sec/60)}min ${Math.round(pass.duration_sec%60)}s • Az ${pass.los_az}°</div>
@@ -975,8 +1069,222 @@ async function init() {
     initScene();
     buildUI();
 
+    // Activate mission control panel if connected to server
+    if (serverMode) {
+        document.getElementById('mission-panel').style.display = 'flex';
+        initMissionControl();
+    }
+
     setTimeout(() => document.getElementById('loading').classList.add('done'), 800);
     animate();
+}
+
+// ============================================================
+// MISSION CONTROL — Server Mode Features
+// ============================================================
+
+let isCapturing = false;
+
+function initMissionControl() {
+    // Check SDR status
+    checkSDRStatus();
+    // Poll SDR status every 10 seconds (faster for capture state)
+    setInterval(checkSDRStatus, 10000);
+    // Load mission log
+    loadMissionLog();
+    // Update capture target when pass selection changes
+    setInterval(updateCaptureTarget, 5000);
+}
+
+async function checkSDRStatus() {
+    try {
+        const resp = await fetch('/api/status');
+        if (!resp.ok) return;
+        const status = await resp.json();
+        
+        const dot = document.getElementById('sdr-dot');
+        const text = document.getElementById('sdr-status-text');
+        const btn = document.getElementById('capture-btn');
+        
+        if (status.sdr_connected) {
+            dot.className = 'sdr-dot connected';
+            text.textContent = 'SDR: Connected';
+            text.style.color = 'var(--success)';
+        } else {
+            dot.className = 'sdr-dot disconnected';
+            text.textContent = 'SDR: Not Found';
+            text.style.color = 'var(--danger)';
+        }
+
+        // Capture state management
+        const serverCapturing = status.capturing === true;
+        
+        if (isCapturing && !serverCapturing) {
+            // Server confirms capture is done — unlock
+            console.log('[SATCOM] Capture complete, unlocking button');
+            isCapturing = false;
+            btn.className = 'capture-btn';
+            btn.disabled = !status.sdr_connected;
+            loadMissionLog();
+            updateCaptureTarget();
+        } else if (isCapturing || serverCapturing) {
+            btn.className = 'capture-btn capturing';
+            btn.textContent = '● CAPTURING...';
+            btn.disabled = true;
+            isCapturing = true;
+        } else {
+            btn.className = 'capture-btn';
+            btn.disabled = !status.sdr_connected;
+        }
+    } catch (e) {
+        console.warn('[SATCOM] Status check failed:', e);
+    }
+}
+
+function updateCaptureTarget() {
+    const target = document.getElementById('capture-target');
+    const btn = document.getElementById('capture-btn');
+    if (!orbitalData || !orbitalData.satellites || isCapturing) return;
+
+    const now = Date.now() / 1000;
+    let activePass = null;
+    let activeSat = null;
+    let nextPass = null;
+    let nextSat = null;
+
+    for (const [name, sat] of Object.entries(orbitalData.satellites)) {
+        if (sat.role !== 'primary' && sat.role !== 'weather') continue;
+        for (const p of (sat.passes || [])) {
+            // Check for currently active pass (AOS passed, LOS not yet)
+            if (p.aos_unix <= now && p.los_unix > now) {
+                if (!activePass || p.max_el > activePass.max_el) {
+                    activePass = p;
+                    activeSat = name;
+                }
+            }
+            // Check for next upcoming pass
+            if (p.aos_unix > now && (!nextPass || p.aos_unix < nextPass.aos_unix)) {
+                nextPass = p;
+                nextSat = name;
+            }
+        }
+    }
+
+    // Prefer active pass over upcoming
+    let displayPass = activePass || nextPass;
+    let displaySat = activePass ? activeSat : nextSat;
+    
+    // Get satellite frequency for capture
+    const sat_freq = displaySat ? (orbitalData.satellites[displaySat].freq_hz || null) : null;
+
+    if (activePass) {
+        // Pass is live — show remaining time
+        const secsRemaining = Math.round(activePass.los_unix - now);
+        const minsRemaining = Math.round(secsRemaining / 60);
+        target.innerHTML = `<span style="color:var(--success)">${activeSat} • LIVE</span><br>` +
+            `Max El: ${activePass.max_el}° • LOS in: ${minsRemaining}m<br>` +
+            `Duration: ${Math.round(activePass.duration_sec/60)}min`;
+        
+        target.dataset.passInfo = JSON.stringify({...activePass, satellite: activeSat, freq_hz: sat_freq});
+        btn.textContent = `▶ Capture ${activeSat}`;
+        // Active pass — capture is allowed now
+    } else if (nextPass) {
+        const secsUntil = nextPass.aos_unix - now;
+        const minsUntil = Math.round(secsUntil / 60);
+        const timeStr = minsUntil > 60 
+            ? `${Math.floor(minsUntil/60)}h ${minsUntil%60}m` 
+            : `${minsUntil}m`;
+        target.innerHTML = `<span style="color:var(--text)">${nextSat}</span><br>` +
+            `Max El: ${nextPass.max_el}° • In: ${timeStr}<br>` +
+            `Duration: ${Math.round(nextPass.duration_sec/60)}min`;
+        
+        target.dataset.passInfo = JSON.stringify({...nextPass, satellite: nextSat, freq_hz: sat_freq});
+        
+        // Only enable capture within 2 minutes of AOS
+        if (secsUntil <= 120) {
+            btn.textContent = `▶ Capture ${nextSat}`;
+        } else {
+            btn.textContent = `▶ AOS in ${timeStr}`;
+            btn.disabled = true;
+        }
+    } else {
+        target.textContent = 'No upcoming passes';
+        target.dataset.passInfo = '';
+        btn.textContent = '▶ No Passes';
+        btn.disabled = true;
+    }
+}
+
+async function triggerCapture() {
+    if (isCapturing) return; // Already capturing
+
+    const target = document.getElementById('capture-target');
+    const passInfoStr = target.dataset.passInfo;
+    if (!passInfoStr) return;
+
+    const passInfo = JSON.parse(passInfoStr);
+    const btn = document.getElementById('capture-btn');
+    
+    // Lock immediately
+    isCapturing = true;
+    btn.className = 'capture-btn capturing';
+    btn.textContent = '● CAPTURING...';
+    btn.disabled = true;
+
+    try {
+        const resp = await fetch('/api/capture', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(passInfo),
+        });
+        const result = await resp.json();
+        
+        if (!resp.ok) {
+            // Capture rejected by server — unlock
+            isCapturing = false;
+            btn.className = 'capture-btn';
+            btn.textContent = `✗ ${result.error || 'Failed'}`;
+            setTimeout(() => {
+                btn.textContent = '▶ Capture Next Pass';
+                btn.disabled = false;
+                updateCaptureTarget();
+            }, 3000);
+        }
+        // If OK, stay locked — checkSDRStatus poll will unlock when done
+    } catch (e) {
+        isCapturing = false;
+        btn.className = 'capture-btn';
+        btn.textContent = '✗ Server Error';
+        btn.disabled = false;
+        setTimeout(() => { updateCaptureTarget(); }, 3000);
+    }
+}
+
+async function loadMissionLog() {
+    try {
+        const resp = await fetch('/api/missions');
+        if (!resp.ok) return;
+        const data = await resp.json();
+        
+        const container = document.getElementById('mission-log');
+        if (!data.missions || data.missions.length === 0) {
+            container.innerHTML = '<div style="font-family:\'JetBrains Mono\',monospace;font-size:10px;color:var(--text-dim);">No missions yet</div>';
+            return;
+        }
+
+        container.innerHTML = data.missions.slice(-10).reverse().map(m => {
+            const time = new Date(m.timestamp).toUTCString().slice(5, 22);
+            const statusClass = m.decode_success ? 'status-ok' : (m.capture_success ? 'status-ok' : 'status-fail');
+            const statusText = m.decode_success ? 'DECODED' : (m.capture_success ? 'CAPTURED' : 'FAILED');
+            return `<div class="mission-log-item">
+                <span class="sat-name">${m.satellite || '?'}</span> • ${time}<br>
+                <span class="${statusClass}">${statusText}</span> • El: ${m.max_elevation_deg || '?'}°
+                ${m.decoded_image ? '<br><a href="/api/decoded/' + m.decoded_image + '" target="_blank" style="color:var(--accent);font-size:9px;">View Image →</a>' : ''}
+            </div>`;
+        }).join('');
+    } catch (e) {
+        // Server not available
+    }
 }
 
 init();

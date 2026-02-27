@@ -1,0 +1,11 @@
+{
+  "input_file": "data/captures/NOAA_18_20260227_032439.bin",
+  "output_file": "/Users/lukewaszyn/satellite-ground-station/data/decoded/NOAA_18_20260227_032439_decoded.png",
+  "timestamp": "20260226_224037",
+  "sample_rate_hz": 2400000.0,
+  "duration_sec": 179.24096,
+  "image_width": 2080,
+  "image_height": 358,
+  "sync_pulses_found": 358,
+  "station_offset_hz": 0
+}
