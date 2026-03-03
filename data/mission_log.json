@@ -193,5 +193,16 @@
     "capture_success": true,
     "decode_success": true,
     "completed": "2026-02-27T03:40:37.901227+00:00"
+  },
+  {
+    "timestamp": "2026-03-03T02:04:17.402120+00:00",
+    "satellite": "NOAA 19",
+    "max_elevation_deg": 41.6,
+    "status": "complete",
+    "capture_file": "data/captures/NOAA_19_20260303_020415.bin",
+    "decoded_image": "NOAA_19_20260303_020415_decoded.png",
+    "capture_success": true,
+    "decode_success": true,
+    "completed": "2026-03-03T02:16:00.449963+00:00"
   }
 ]

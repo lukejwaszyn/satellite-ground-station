@@ -79,8 +79,10 @@ def load_iq(filepath):
         return iq.astype(np.complex64), fs
     
     elif ext == '.bin':
-        # Raw binary: interleaved float32 I/Q
-        raw = np.fromfile(filepath, dtype=np.float32)
+        # Raw binary: RTL-SDR uint8 interleaved I/Q (values 0-255, centered at 127)
+        raw = np.fromfile(filepath, dtype=np.uint8).astype(np.float32)
+        raw = (raw - 127.5) / 127.5  # Normalize to [-1, 1]
+        raw = (raw - 127.5) / 127.5  # Normalize to [-1, 1]
         iq = raw[0::2] + 1j * raw[1::2]
         return iq.astype(np.complex64), 2.4e6  # Assume default rate
     
