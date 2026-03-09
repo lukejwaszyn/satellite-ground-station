@@ -204,5 +204,25 @@
     "capture_success": true,
     "decode_success": true,
     "completed": "2026-03-03T02:16:00.449963+00:00"
+  },
+  {
+    "timestamp": "2026-03-07T00:55:18.980004+00:00",
+    "satellite": "NOAA 15",
+    "max_elevation_deg": 20.4,
+    "status": "complete",
+    "capture_file": "data/captures/NOAA_15_20260307_005642.bin",
+    "decoded_image": null,
+    "capture_success": true,
+    "completed": "2026-03-07T01:04:33.885010+00:00"
+  },
+  {
+    "timestamp": "2026-03-07T02:51:43.798212+00:00",
+    "satellite": "NOAA 19",
+    "max_elevation_deg": 89,
+    "status": "complete",
+    "capture_file": "data/captures/NOAA_19_20260307_025325.bin",
+    "decoded_image": null,
+    "capture_success": true,
+    "completed": "2026-03-07T03:04:28.250407+00:00"
   }
 ]

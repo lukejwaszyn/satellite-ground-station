@@ -1,14 +1,14 @@
 {
   "station": {
     "name": "My Ground Station",
-    "lat": 40.7934,
-    "lon": -77.8600,
-    "elevation_m": 376.0,
+    "lat": 40.6173,
+    "lon": -80.2543,
+    "elevation_m": 220.0,
     "min_elevation_deg": 10.0
   },
   "capture": {
     "sample_rate": 2.4e6,
-    "gain_db": 40,
+    "gain_db": 25,
     "pre_aos_margin_sec": 30,
     "post_los_margin_sec": 30,
     "primary_freq_hz": 137.1e6

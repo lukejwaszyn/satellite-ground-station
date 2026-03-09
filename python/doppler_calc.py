@@ -35,10 +35,10 @@ NOAA_FREQUENCIES = {
     'NOAA 20': 137.100e6,  # NOAA 20 uses same as NOAA 19
 }
 
-# Observer location (State College, PA)
-OBSERVER_LAT = 40.7934
-OBSERVER_LON = -77.8600
-OBSERVER_ELEV = 376  # meters
+# Observer location (Aliquippa, PA)
+OBSERVER_LAT = 40.6173
+OBSERVER_LON = -80.2543
+OBSERVER_ELEV = 220  # meters
 
 
 def load_satellite(sat_name, tle_file='weather.txt'):

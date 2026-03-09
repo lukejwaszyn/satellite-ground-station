@@ -2,362 +2,219 @@
 
 ## Overview
 
-Autonomous ground station and mission operations platform for NOAA weather satellite APT image reception. Features custom VHF antenna, low-noise amplifier, real-time DSP pipeline, AI-driven mission planning, and an interactive 3D mission operations interface tracking 12 satellites across multiple constellations — all integrated through a unified mission server with REST API.
+Autonomous ground station for NOAA weather satellite APT image reception with integrated mission operations interface, real-time orbital tracking, and ML-driven mission planning. Built as a solo project with 7 integrated subsystems, 7,000+ lines of source code across Python, C++, JavaScript, and MATLAB.
 
-**Project Duration:** 10 weeks (January 16 - March 30, 2026)
-
-**Objective:** Autonomous NOAA APT reception with >80% decode success rate, ML-optimized mission scheduling, and real-time operator situational awareness
+**Project Duration:** January 16 - Present (ongoing)  
+**Author:** Luke Waszyn, Engineering Science, Penn State  
+**Status:** V3 Complete - First satellite signal decoded, image quality iteration in progress
 
 ---
 
 ## Quick Start
 
 ```bash
-git clone https://github.com/lukejwaszyn/satellite-ground-station.git
+# Install dependencies
+pip install skyfield numpy scipy pillow scikit-learn pandas
+
+# Start the mission server
 cd satellite-ground-station
 python3 satcom_server.py
-# Open http://localhost:8080
+
+# Open the HMI
+# Navigate to http://localhost:8080
 ```
 
-Edit `config.json` with your station coordinates. No hardware required for tracking mode — add an RTL-SDR and antenna to capture signals.
-
----
-
-## Mission Operations Interface
-
-The system includes SATCOM, a 3D mission operations interface built with Three.js that provides real-time situational awareness and integrated mission control:
-
-- **Multi-constellation tracking:** 12 satellites across NOAA, METEOR, ISS, Landsat, Terra, and Aqua
-- **Real SGP4 propagation:** Skyfield backend with live TLE data from Celestrak
-- **Pass prediction:** AOS/TCA/LOS timeline with live state transitions, countdown, azimuth, elevation, range
-- **Doppler visualization:** Real-time Doppler shift profiles with TCA zero-crossing
-- **Elevation profiles:** Pass geometry charts for each upcoming pass
-- **Mission control panel:** SDR status indicator, next capturable pass with AOS gate, one-click capture trigger
-- **Mission log:** Capture history with decode status and image links served from the HMI
-- **Satellite roles:** Primary imaging target (NOAA 20), weather constellation, and display satellites
-
----
-
-## Mission Server & REST API
-
-All subsystems are integrated through `satcom_server.py`, a unified backend that serves the HMI and exposes programmatic control:
-
-```bash
-python3 satcom_server.py                # Default port 8080
-python3 satcom_server.py --port 3000    # Custom port
-python3 satcom_server.py --no-generate  # Skip initial orbital data generation
-```
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/` | GET | Mission operations HMI |
-| `/api/orbital-data` | GET | Live orbital data (SGP4 propagation, 10-min cache) |
-| `/api/passes` | GET | Upcoming passes with elevation/role filtering |
-| `/api/status` | GET | System status (SDR, capture state, uptime) |
-| `/api/capture` | POST | Trigger satellite capture (AOS-gated) |
-| `/api/missions` | GET | Mission history and decoded images |
-| `/api/config` | GET/PUT | Station configuration |
-| `/api/refresh` | POST | Force orbital data regeneration |
-| `/api/decoded/<file>` | GET | Serve decoded APT images |
-
-### Integration Architecture
-
-```
-Browser (localhost:8080)
-  └── satellite-viz.html (Three.js 3D globe + mission control panel)
-        │
-        ├── GET  /api/orbital-data  → generate_orbital_data.py (Skyfield SGP4)
-        ├── GET  /api/passes        → schedule_captures.py (pass prediction)
-        ├── GET  /api/status        → system state (SDR, capture, uptime)
-        ├── POST /api/capture       → run_capture_async → rtlsdr_capture (C++)
-        │                                                → decode_apt.py (DSP)
-        │                                                → data_store.py (ML log)
-        ├── GET  /api/missions      → mission_log.json
-        └── GET  /api/decoded/*     → decoded APT images (PNG)
-```
+The mission server automatically generates orbital data for 11 satellites across 5 constellations, starts the REST API, and serves the 3D mission operations interface.
 
 ---
 
 ## System Architecture
 
-This project follows a formal systems engineering methodology with requirements-driven development and staged verification:
+Formal systems engineering methodology with requirements-driven development and staged verification:
 
-- **L0 System Context:** End-to-end RF receive chain from antenna to decoded imagery, plus mission operations display
-- **L1 Subsystems:** Orbital prediction, RF front-end, digital capture, DSP processing, automation, AI mission planning, mission operations HMI
-- **L2 Implementation:** Python/C++/JavaScript/MATLAB implementation with hardware integration and ML pipeline
+- **L0 System Context:** End-to-end RF receive chain from antenna to decoded imagery
+- **L1 Subsystems:** 7 subsystems (orbital prediction, RF front-end, digital capture, DSP/decode, mission server, HMI, ML planning)
+- **L2 Implementation:** Python/C++/JavaScript with hardware integration
 
-### Subsystem Status
-
-| # | Subsystem | Technology | Status |
-|---|-----------|-----------|--------|
-| 1 | Orbital Prediction | Python/Skyfield SGP4 | Complete |
-| 2 | RF Front-End | Custom VHF dipole, LNA (BFP420) | Antenna built, LNA in fab |
-| 3 | Digital Capture | C++/librtlsdr async streaming | Complete |
-| 4 | DSP & Decoding | Python/SciPy FM demod + APT sync | Complete |
-| 5 | Automation & Control | Python orchestration + REST API | Complete |
-| 6 | AI Mission Planning | Python/scikit-learn RandomForest | Complete |
-| 7 | Mission Operations HMI | JavaScript/Three.js/WebGL | Complete |
-
----
-
-## Verification Strategy
-
-| Stage | Objective | Status |
-|-------|-----------|--------|
-| V0 | Orbital prediction validated (±15s accuracy) | **Complete** |
-| V0.5 | Mission operations HMI validated (12 satellites, 5 constellations) | **Complete** |
-| V1 | RF link established (SDR captures signal) | **Complete** — first capture Feb 27, 2026 |
-| V2 | LNA integration and SNR improvement | Planned (PCB in fabrication) |
-| V3 | Functional decode (first image) | Pipeline validated with public NOAA 19 sample |
-| V4 | Automated Doppler tracking | Software complete |
-| V5 | Multi-pass performance characterization (25+ images) | Planned |
-| V6 | ML mission planning integration | Software complete |
-
-### First Capture (V1 Milestone — February 27, 2026)
-
-The system executed its first end-to-end capture via the mission operations HMI:
-- **Satellite:** NOAA 18 at 89.4° max elevation (nearly overhead)
-- **Pipeline:** HMI capture button → REST API → C++ async I/Q recording (717s) → APT decoder → mission log
-- **Result:** Full 7-subsystem integration validated end-to-end
-
----
-
-## Success Tiers
-
-**Tier 1 - Minimum Viable (V3)**
-- One decoded satellite image with recognizable Earth features
-- End-to-end RF chain validated: antenna → LNA → SDR → DSP → image
-
-**Tier 2 - Strong (V5)**
-- 25+ decoded images captured autonomously
-- Multi-day unattended operation
-- Quantified performance metrics and failure mode analysis
-
-**Tier 3 - Exceptional (V6)**
-- ML layer learns from mission outcomes
-- Predictive model optimizes pass selection
-- System improves performance over time
-
----
-
-## Technical Approach
-
-### Hardware
-
-- RTL-SDR v4 software-defined radio
-- Custom half-wave VHF dipole antenna (137 MHz)
-- Low-noise amplifier (15-20 dB gain, <1.5 dB NF) — PCB in fabrication
-- Coaxial RF transmission lines (50Ω impedance)
-
-### Software Stack
-
-| Language | Purpose |
-|----------|---------|
-| Python | Orbital mechanics, ML pipeline, orchestration, APT decoding, mission server |
-| C++ | Real-time async I/Q capture, ring buffer, Doppler tracking |
-| JavaScript | 3D mission operations interface (Three.js / WebGL) |
-| MATLAB | Signal processing, PSD analysis, verification |
-
-### Core Capabilities
-
-- **Orbital Mechanics:** SGP4 propagation via Skyfield, multi-constellation tracking (12 satellites)
-- **Signal Processing:** FM demodulation, APT sync detection, image reconstruction
-- **Real-Time Control:** Automated Doppler frequency compensation in C++
-- **ML Mission Planning:** Pass scoring, success prediction, schedule optimization
-- **Mission Server:** REST API integrating all subsystems with AOS-gated capture control
-- **Mission Operations HMI:** 3D globe with real-time satellite positions, pass timeline, Doppler/elevation charts, mission control panel
-
----
-
-## Current Status
-
-### Software Complete
-All software subsystems are implemented, integrated, and operational:
-
-- **Mission Server:** Unified REST API backend connecting all subsystems (satcom_server.py)
-- **Orbital Prediction:** SGP4 propagator, pass scheduling, Doppler calculation (predict_passes.py, doppler_calc.py)
-- **APT Decoding:** FM demodulation, sync detection, image reconstruction (decode_apt.py, decode_apt_wav.py)
-- **Real-Time Capture:** C++ async I/Q streaming with ring buffer (rtlsdr_capture.cpp, doppler_tracker.cpp)
-- **Mission Automation:** End-to-end autonomous capture orchestration (schedule_captures.py, run_mission.py)
-- **ML Pipeline:** Feature engineering, pass scoring, success prediction, schedule optimization, model training (6 modules)
-- **Mission Operations HMI:** 3D multi-constellation visualizer with integrated mission control (satellite-viz.html)
-
-### V1 Complete — First Capture
-- First end-to-end capture executed February 27, 2026 via HMI
-- NOAA 18 at 89.4° elevation, 717-second I/Q recording
-- Full pipeline validated: HMI → API → C++ capture → APT decode → mission log
-- Custom VHF dipole antenna fabricated and operational
-- LNA PCB in fabrication
-
----
-
-## Project Structure
+### Integration Architecture
 
 ```
-satellite-ground-station/
-├── satcom_server.py               # Mission operations server (REST API)         [DONE]
-├── config.json                    # Station configuration
-│
-├── hmi/
-│   ├── generate_orbital_data.py   # Skyfield SGP4 multi-constellation backend    [DONE]
-│   └── satellite-viz.html         # 3D mission ops frontend (Three.js)           [DONE]
-│
-├── python/
-│   ├── predict_passes.py          # SGP4 propagator                              [DONE]
-│   ├── doppler_calc.py            # Doppler frequency profiles                   [DONE]
-│   ├── schedule_captures.py       # Automation orchestrator                      [DONE]
-│   ├── run_mission.py             # End-to-end mission execution                 [DONE]
-│   ├── data_store.py              # Mission logging + ML data store              [DONE]
-│   ├── demod/
-│   │   ├── decode_apt.py          # Raw I/Q APT decoder                          [DONE]
-│   │   └── decode_apt_wav.py      # WAV APT decoder (testing)                    [DONE]
-│   └── ml/
-│       ├── feature_engineering.py # ML feature extraction                        [DONE]
-│       ├── pass_scorer.py         # Rule-based pass scoring                      [DONE]
-│       ├── ml_predictor.py        # ML success prediction                        [DONE]
-│       ├── scheduler_optimizer.py # Schedule optimization                        [DONE]
-│       ├── model_trainer.py       # Model training pipeline                      [DONE]
-│       └── data_store.py          # Historical data management                   [DONE]
-│
-├── cpp/
-│   ├── src/
-│   │   ├── rtlsdr_test.cpp        # Hardware verification                       [DONE]
-│   │   ├── rtlsdr_capture.cpp     # Async I/Q streaming with ring buffer        [DONE]
-│   │   └── doppler_tracker.cpp    # Real-time frequency correction               [DONE]
-│   └── CMakeLists.txt                                                            [DONE]
-│
-├── matlab/
-│   └── tests/                     # SDR and signal verification scripts          [DONE]
-│
-├── docs/
-│   ├── requirements/              # FR-1 to FR-8, performance, interface
-│   ├── architecture/              # L0-L2, interface control, verification plan
-│   └── ml/                        # ML architecture, feature specs, model cards
-│
-└── data/
-    ├── tle/                       # Cached TLE files
-    ├── captures/                  # Raw I/Q recordings
-    ├── decoded/                   # APT images (PNG)
-    ├── doppler/                   # Doppler profiles (JSON)
-    ├── test_samples/              # Pipeline validation samples
-    └── ml/                        # Training data, models, predictions
+Browser HMI (Three.js/WebGL)
+    |
+    | HTTP/REST
+    v
+Mission Server (Python Flask - satcom_server.py)
+    |
+    |--- Orbital Predictor (Skyfield SGP4)
+    |--- Doppler Calculator 
+    |--- Capture Orchestrator --> C++ Binary (rtlsdr_capture)
+    |--- APT Decoder (decode_apt.py)
+    |--- ML Pipeline (scikit-learn)
+    |--- Mission Logger
+    |
+    v
+RTL-SDR v4 --> SAWbird LNA --> VHF Antenna
 ```
 
 ---
 
-## Configuration
+## Mission Operations Interface
 
-Edit `config.json` to set your station location:
+The browser-based HMI provides real-time mission operations:
 
-```json
-{
-  "station": {
-    "name": "My Ground Station",
-    "lat": 40.7934,
-    "lon": -77.8600,
-    "elevation_m": 376.0,
-    "min_elevation_deg": 10.0
-  },
-  "capture": {
-    "sample_rate": 2.4e6,
-    "gain_db": 40,
-    "primary_freq_hz": 137.1e6
-  },
-  "hmi": {
-    "propagation_hours": 24,
-    "position_step_sec": 30,
-    "http_port": 8080
-  }
-}
-```
+- **3D Globe:** Real-time satellite positions for 12 spacecraft across 5 constellations (NOAA, METEOR, ISS, GOES, Landsat)
+- **Pass Timeline:** Live AOS/TCA/LOS state transitions with satellite-specific data
+- **Mission Control Panel:** SDR status, AOS-gated capture button, frequency display
+- **Mission Log:** Capture history with decoded image display
+- **Orbit Visualization:** Ground tracks, coverage footprints, orbital planes
 
 ---
 
-## Command-Line Tools
+## Verification Status
 
-```bash
-# List upcoming passes
-python3 python/schedule_captures.py list
+| Stage | Objective | Status | Date |
+|-------|-----------|--------|------|
+| V0 | Orbital prediction validated | **Complete** | Jan 16, 2026 |
+| V0.5 | SDR environment verified | **Complete** | Jan 30, 2026 |
+| V1 | RF link established (first capture) | **Complete** | Feb 27, 2026 |
+| V2 | LNA integration (SAWbird NOAA) | **Complete** | Mar 6, 2026 |
+| V3 | Signal decoded (831 sync pulses) | **Complete** | Mar 6, 2026 |
+| V3+ | Clean decoded image with features | **In Progress** | - |
+| V4 | Automated Doppler tracking | Planned | - |
+| V5 | Multi-pass characterization (25+ images) | Planned | - |
+| V6 | ML mission planning integration | Planned | - |
 
-# Generate optimized capture schedule
-PYTHONPATH=. python3 python/ml/scheduler_optimizer.py --hours 48
+---
 
-# Run a capture mission directly
-python3 python/run_mission.py --min-el 30
+## Hardware
 
-# Decode a test WAV file
-python3 python/demod/decode_apt_wav.py data/test_samples/argentina.wav
+| Component | Specification |
+|-----------|--------------|
+| SDR | RTL-SDR Blog V4 (R828D tuner, 24-1766 MHz) |
+| LNA | Nooelec SAWbird NOAA (20 dB gain, 0.7 dB NF, 137.5 MHz center, SAW filter) |
+| Antenna | Stock VHF dipole (QFH antenna in fabrication) |
+| Feed | 50 ohm coaxial with SMA interface |
 
-# Run 24hr capture daemon
-python3 python/schedule_captures.py daemon --hours 24
-```
+**RF Chain:** Antenna --> SAWbird LNA --> Coax --> RTL-SDR v4 --> USB --> MacBook Air M4
+
+---
+
+## Software Stack
+
+| Language | Lines | Purpose |
+|----------|-------|---------|
+| Python | ~4,200 | Orbital mechanics, ML pipeline, orchestration, APT decoding, mission server |
+| JavaScript/HTML | ~1,300 | 3D mission operations interface (Three.js, WebGL) |
+| C++ | ~580 | Real-time I/Q capture with async streaming, Doppler tracking |
+| MATLAB | ~70 | Spectrum analysis, verification |
+| **Total** | **~7,100** | |
+
+### Key Files
+
+| File | Lines | Description |
+|------|-------|-------------|
+| `satellite-viz.html` | 1,293 | 3D HMI with mission control |
+| `satcom_server.py` | 736 | Unified REST API mission server |
+| `generate_orbital_data.py` | 582 | Multi-constellation orbital predictor |
+| `schedule_captures.py` | 465 | Capture orchestration and pipeline |
+| `model_trainer.py` | 418 | ML model training pipeline |
+| `data_store.py` | 410 | Mission database layer |
+| `decode_apt.py` | 358 | Memory-efficient APT decoder (chunked processing) |
+| `pass_scorer.py` | 338 | Rule-based and ML pass scoring |
+| `feature_engineering.py` | 337 | ML feature extraction |
+| `scheduler_optimizer.py` | 315 | Schedule optimization engine |
+| `run_mission.py` | 315 | Autonomous mission execution |
+| `ml_predictor.py` | 309 | ML prediction interface |
+| `doppler_tracker.cpp` | 303 | Real-time Doppler compensation |
+| `rtlsdr_capture.cpp` | 280 | Async I/Q capture with ring buffer |
+| `doppler_calc.py` | 225 | Doppler frequency profiles |
+
+---
+
+## API Reference
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/` | GET | Mission operations HMI |
+| `/api/status` | GET | System status (SDR, capture state, satellite info) |
+| `/api/passes` | GET | Predicted passes with Doppler profiles |
+| `/api/capture` | POST | Trigger satellite capture |
+| `/api/config` | GET | Station configuration |
+| `/api/missions` | GET | Mission log history |
+| `/api/decoded/<file>` | GET | Decoded image retrieval |
+| `/api/orbital-data` | GET | Current orbital data for HMI |
+
+---
+
+## Milestone History
+
+### V1 - First Capture (February 27, 2026)
+- NOAA 18 at 89.4 deg elevation, 717-second pass
+- Full pipeline executed: HMI capture button --> REST API --> C++ binary --> decoder
+- Image was black due to frequency bug (captured at 137.1 MHz instead of NOAA 18's 137.9125 MHz)
+- Root cause identified and fixed: frontend now sends satellite-specific frequency
+
+### V1.5 - Decoder Fix (March 3, 2026)
+- Identified critical dtype bug: decoder read raw binary as float32 instead of uint8
+- This caused it to process only 1/4 of actual samples with garbage values
+- Fixed to read as uint8 with normalization to [-1, 1]
+- Re-decoded NOAA 19 capture: first sync pulses detected (2 found)
+
+### V2 - LNA Integration (March 6, 2026)
+- Nooelec SAWbird NOAA integrated into RF chain
+- 20 dB gain, 0.7 dB noise figure, built-in SAW bandpass filter
+- Powered via bias tee or microUSB
+- Verified amplification via spectrum scan (power levels -19 to -24 dB vs noise floor)
+
+### V3 - First Signal Decode (March 6, 2026)
+- NOAA 15 at 20.4 deg: 135 sync pulses detected, APT frame structure visible
+- NOAA 19 at 89.0 deg: 831 sync pulses detected, full-length pass decoded
+- Memory-efficient chunked decoder implemented (processes 3+ GB files in ~2-3 GB RAM)
+- Image noisy but APT structure confirmed, antenna upgrade (QFH) in progress
+
+---
+
+## Decoded Signal Progression
+
+| Date | Satellite | Elevation | Sync Pulses | Result |
+|------|-----------|-----------|-------------|--------|
+| Feb 27 | NOAA 18 | 89.4 deg | 0 | Black (wrong frequency) |
+| Mar 3 | NOAA 19 | 41.6 deg | 0 (dtype bug) | Black (float32 vs uint8) |
+| Mar 3 | NOAA 19 | 41.6 deg | 2 (reprocessed) | Faint sync lines visible |
+| Mar 6 | NOAA 15 | 20.4 deg | 135 | APT frame structure visible |
+| Mar 6 | NOAA 19 | 89.0 deg | 831 | Full pass decoded, noisy image |
+
+---
+
+## Next Steps
+
+- **Antenna:** Build QFH antenna from speaker wire for circular polarization and skyward gain pattern
+- **Image Quality:** Verify LNA power delivery, tune antenna element length, optimize decoder
+- **Daytime Capture:** Visible channel (Channel A) for higher contrast features
+- **Weather API:** Integrate cloud cover data for capture quality prediction
+- **ML Training:** Collect 20+ captures to build training dataset for V6
 
 ---
 
 ## Documentation
 
-### Requirements
-- Functional requirements (FR-1 through FR-8, including HMI)
-- Performance requirements (PR-1 through PR-5)
-- Interface requirements (hardware, software, data, HMI)
+All documentation follows formal systems engineering standards:
 
-### Architecture
-- L0 system context (external entities, boundaries, multi-constellation tracking)
-- L1 subsystem decomposition (7 subsystems including AI mission planning and HMI)
-- L2 implementation details (multi-language stack, ML pipeline, HMI data flows)
-- Interface Control Document (6 ICDs with schemas)
-
-### ML System
-- ML architecture specification
-- Feature definitions
-- Model training and validation procedures
-
-### Verification
-- V0-V6 staged verification plan (plus V0.5 for HMI)
-- Pass/fail criteria for each stage
-- Requirements traceability matrix
+- **Requirements:** Functional (FR-1 to FR-8), performance (PR-1 to PR-4), interface
+- **Architecture:** L0 system context, L1 subsystem decomposition (7 subsystems), L2 implementation
+- **Interface Control:** 6 ICDs with data schemas and protocols
+- **Verification:** V0-V6 staged plan with pass/fail criteria and requirements traceability
+- **ML Architecture:** Feature definitions, model specs, training procedures
 
 ---
 
 ## Technologies
 
-**Languages:**
-- Python 3.10+ (Skyfield, NumPy, SciPy, scikit-learn, pandas)
-- JavaScript (Three.js r128, WebGL, HTML5 Canvas)
-- C++17 (librtlsdr, real-time DSP)
-- MATLAB R2025b (Signal Processing, Communications, Satellite Comms Toolboxes)
-
-**ML Stack:**
-- scikit-learn (RandomForest, preprocessing pipelines)
-- joblib (model persistence)
-
-**HMI Stack:**
-- Three.js r128 (3D globe, satellite meshes, orbital trails)
-- HTML5 Canvas (elevation and Doppler charts)
-- Skyfield (SGP4 propagation backend)
-
-**Server:**
-- Python http.server (zero external dependencies)
-- REST API with JSON responses
-- Background thread capture execution
-
-**Hardware:**
-- RTL-SDR Blog V4 (R828D tuner)
-- Custom VHF dipole antenna
-- Custom LNA PCB (BFP420)
-
-**Platform:**
-- Primary: macOS (Apple Silicon M4)
-- Compatible: Linux, Windows (WSL)
-
----
-
-## Author
-
-Luke Waszyn
-Engineering Science, The Pennsylvania State University
-
-GitHub: [lukejwaszyn](https://github.com/lukejwaszyn)
+**Languages:** Python 3.10+, C++17, JavaScript (ES6+), MATLAB  
+**Libraries:** Skyfield, NumPy, SciPy, Pillow, scikit-learn, pandas, Three.js, WebGL  
+**Hardware:** RTL-SDR Blog V4, Nooelec SAWbird NOAA, VHF dipole antenna  
+**Platform:** macOS (Apple Silicon M4)  
+**Build:** CMake (C++), pip (Python)
 
 ---
 
@@ -369,9 +226,4 @@ MIT License - see LICENSE file for details
 
 ## Acknowledgments
 
-- Orbital mechanics via [Skyfield](https://rhodesmill.org/skyfield/) by Brandon Rhodes
-- 3D visualization built with [Three.js](https://threejs.org/)
-- TLE data from [Celestrak](https://celestrak.org/)
-- APT decode pipeline validated with sample from [noaa-apt](https://noaa-apt.mbernardi.com.ar/)
-- RTL-SDR community for hardware documentation and librtlsdr
-- Systems engineering methodology inspired by JPL mission design practices
+This project applies formal systems engineering methodology inspired by JPL's approach to mission design and verification. Orbital mechanics implementation uses the Skyfield library by Brandon Rhodes. APT signal format based on NOAA KLM User's Guide.

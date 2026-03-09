@@ -39,7 +39,7 @@ CONFIG = {
     'pre_aos_margin_sec': 30,       # Start capture this many seconds before AOS
     'post_los_margin_sec': 30,      # Continue capture this many seconds after LOS
     'capture_sample_rate': 2.4e6,   # RTL-SDR sample rate
-    'capture_gain_db': 40,          # SDR gain
+    'capture_gain_db': 25,          # SDR gain
     'data_dir': 'data',
     'captures_dir': 'data/captures',
     'decoded_dir': 'data/decoded',
@@ -65,9 +65,9 @@ def get_upcoming_passes(hours_ahead=24, min_elevation=None):
     if min_elevation is None:
         min_elevation = CONFIG['min_elevation_deg']
     
-    # Observer location (State College, PA)
-    LATITUDE = 40.7934
-    LONGITUDE = -77.8600
+    # Observer location (Aliquippa, PA)
+    LATITUDE = 40.6173
+    LONGITUDE = -80.2543
     ELEVATION = 376
     
     ts = load.timescale()

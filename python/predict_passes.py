@@ -2,9 +2,9 @@ from skyfield.api import load, wgs84
 from datetime import datetime, timedelta
 import numpy as np
 
-# Observer location: State College, PA
-LATITUDE = 40.7934    # degrees N
-LONGITUDE = -77.8600  # degrees W  
+# Observer location: Aliquippa, PA
+LATITUDE = 40.6173    # degrees N
+LONGITUDE = -80.2543  # degrees W  
 ELEVATION = 376       # meters
 MIN_ELEVATION = 10    # degrees - only passes above 10° horizon
 
@@ -12,7 +12,7 @@ def main():
     print("="*60)
     print("SATELLITE GROUND STATION - PASS PREDICTOR V0")
     print("="*60)
-    print(f"Observer: State College, PA")
+    print(f"Observer: Aliquippa, PA")
     print(f"Location: {LATITUDE}°N, {LONGITUDE}°W, {ELEVATION}m")
     print(f"Minimum elevation: {MIN_ELEVATION}°\n")
     

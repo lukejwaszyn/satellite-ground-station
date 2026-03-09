@@ -1,0 +1,13 @@
+{
+  "source_file": "NOAA_15_20260307_005642.bin",
+  "decode_time": "2026-03-06T20:04:33.884751",
+  "sample_rate": 48000.0,
+  "original_sample_rate": 2400000.0,
+  "duration_sec": 522.97728,
+  "sync_pulses_found": 135,
+  "image_shape": [
+    135,
+    2080
+  ],
+  "station_offset_hz": 0
+}

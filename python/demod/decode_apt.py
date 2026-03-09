@@ -1,19 +1,13 @@
 #!/usr/bin/env python3
 """
 decode_apt.py
-Satellite Ground Station - APT Image Decoder
+Satellite Ground Station - APT Image Decoder (Memory-Efficient)
 
-Decodes NOAA APT weather satellite images from raw I/Q captures.
+Decodes NOAA APT weather satellite images from raw RTL-SDR I/Q captures.
+Processes data in chunks to fit within 16 GB RAM.
 
-Signal chain:
-    Raw I/Q (137 MHz centered, 2.4 MHz sample rate)
-    → FM Demodulation (quadrature discriminator)
-    → Lowpass Filter (17 kHz cutoff)
-    → Resample to 20800 Hz
-    → AM Demodulation (envelope detection)
-    → Sync Detection (find line boundaries)
-    → Image Reconstruction (2080 pixels/line)
-    → PNG Output
+RTL-SDR raw format: interleaved uint8 I/Q (values 0-255, centered at 127)
+APT format: 2 lines/second, 2080 pixels/line, FM modulated, AM subcarrier
 
 Author: Luke Waszyn
 Date: February 2026
@@ -21,20 +15,17 @@ Date: February 2026
 
 import numpy as np
 from scipy import signal
-from scipy.io import loadmat, wavfile
+from scipy.io import loadmat
+from datetime import datetime
 import os
 import json
-from datetime import datetime
 
-# APT Format Constants
+# APT Signal Parameters
 APT_LINES_PER_SEC = 2
 APT_PIXELS_PER_LINE = 2080
-APT_CARRIER_FREQ = 2400  # Hz
-APT_SAMPLE_RATE = 20800  # Hz (4 samples per pixel at 2 lines/sec)
-
-# Sync pulse pattern (approximate - 7 cycles of specific frequency)
-SYNC_A_FREQ = 1040  # Hz - Sync A (channel A start)
-SYNC_B_FREQ = 832   # Hz - Sync B (channel B start)
+APT_SAMPLE_RATE = 20800  # 2080 pixels * 2 lines/sec * 5 samples/pixel
+APT_SYNC_FREQ = 1040  # Hz - sync pulse frequency
+APT_LINE_DURATION = 0.5  # seconds per line
 
 
 def load_iq(filepath):
@@ -82,7 +73,6 @@ def load_iq(filepath):
         # Raw binary: RTL-SDR uint8 interleaved I/Q (values 0-255, centered at 127)
         raw = np.fromfile(filepath, dtype=np.uint8).astype(np.float32)
         raw = (raw - 127.5) / 127.5  # Normalize to [-1, 1]
-        raw = (raw - 127.5) / 127.5  # Normalize to [-1, 1]
         iq = raw[0::2] + 1j * raw[1::2]
         return iq.astype(np.complex64), 2.4e6  # Assume default rate
     
@@ -90,22 +80,103 @@ def load_iq(filepath):
         raise ValueError(f"Unsupported file format: {ext}")
 
 
+def load_iq_chunked(filepath, fs=2.4e6, target_fs=48000):
+    """
+    Load and decimate raw RTL-SDR I/Q data in chunks.
+    
+    Processes the file in ~50 MB blocks to keep peak RAM under 8 GB.
+    Each chunk is: load uint8 -> normalize -> complex -> FM demod -> decimate
+    
+    Returns: decimated FM audio (float32), decimated sample rate
+    """
+    ext = os.path.splitext(filepath)[1].lower()
+    
+    if ext != '.bin':
+        # For non-binary formats, load normally and decimate
+        iq, fs = load_iq(filepath)
+        fm = np.angle(iq[1:] * np.conj(iq[:-1]))
+        del iq
+        decim_factor = int(fs / target_fs)
+        fm_dec = signal.decimate(fm, decim_factor, ftype='fir')
+        del fm
+        return fm_dec, target_fs
+    
+    file_size = os.path.getsize(filepath)
+    total_iq_samples = file_size // 2  # 2 bytes per complex sample (I + Q)
+    
+    decim_factor = int(fs / target_fs)
+    
+    # Process in chunks of ~50M IQ samples (~100 MB raw)
+    # Must be divisible by decim_factor for clean decimation
+    chunk_iq_samples = 50_000_000
+    chunk_iq_samples = (chunk_iq_samples // decim_factor) * decim_factor
+    chunk_bytes = chunk_iq_samples * 2  # 2 bytes per IQ sample
+    
+    fm_chunks = []
+    offset = 0
+    chunk_num = 0
+    prev_sample = None  # For FM demod continuity across chunks
+    
+    print(f"  Processing {total_iq_samples:,} IQ samples in chunks of {chunk_iq_samples:,}")
+    
+    with open(filepath, 'rb') as f:
+        while offset < file_size:
+            # Read chunk of raw bytes
+            raw_bytes = np.frombuffer(f.read(chunk_bytes), dtype=np.uint8)
+            if len(raw_bytes) < 4:
+                break
+            
+            # Convert to normalized complex IQ
+            raw = raw_bytes.astype(np.float32)
+            raw = (raw - 127.5) / 127.5
+            iq = raw[0::2] + 1j * raw[1::2]
+            del raw, raw_bytes
+            
+            # FM demodulate: angle(iq[n] * conj(iq[n-1]))
+            # Handle boundary between chunks
+            if prev_sample is not None:
+                iq_with_prev = np.concatenate(([prev_sample], iq))
+                product = iq_with_prev[1:] * np.conj(iq_with_prev[:-1])
+            else:
+                product = iq[1:] * np.conj(iq[:-1])
+            
+            prev_sample = iq[-1]
+            del iq
+            
+            fm = np.angle(product).astype(np.float32)
+            del product
+            
+            # Decimate this chunk
+            # Trim to multiple of decim_factor
+            trim_len = (len(fm) // decim_factor) * decim_factor
+            if trim_len > 0:
+                fm_trimmed = fm[:trim_len]
+                fm_dec = signal.decimate(fm_trimmed, decim_factor, ftype='fir')
+                fm_chunks.append(fm_dec)
+                del fm_trimmed, fm_dec
+            
+            del fm
+            offset += chunk_bytes
+            chunk_num += 1
+            
+            progress = min(100, offset * 100 // file_size)
+            print(f"    Chunk {chunk_num}: {progress}% complete", end='\r')
+    
+    print(f"    Processed {chunk_num} chunks                    ")
+    
+    # Concatenate all decimated chunks
+    fm_decimated = np.concatenate(fm_chunks)
+    del fm_chunks
+    
+    return fm_decimated, target_fs
+
+
 def fm_demodulate(iq):
     """
     FM demodulation using quadrature discriminator.
-    
-    d/dt(phase) = instantaneous frequency
-    
-    For discrete samples:
-    freq[n] = angle(iq[n] * conj(iq[n-1]))
     """
-    # Quadrature discriminator
-    # Multiply each sample by conjugate of previous sample
-    # Phase difference = instantaneous frequency
-    
     product = iq[1:] * np.conj(iq[:-1])
     fm_out = np.angle(product)
-    
     return fm_out
 
 
@@ -115,8 +186,6 @@ def lowpass_filter(data, cutoff_hz, sample_rate, order=5):
     """
     nyq = sample_rate / 2
     normalized_cutoff = cutoff_hz / nyq
-    
-    # Clamp to valid range
     normalized_cutoff = min(normalized_cutoff, 0.99)
     
     b, a = signal.butter(order, normalized_cutoff, btype='low')
@@ -137,16 +206,10 @@ def resample_signal(data, original_rate, target_rate):
 def am_demodulate(data):
     """
     AM demodulation via envelope detection.
-    
     The APT signal uses a 2400 Hz AM subcarrier.
-    We detect the envelope using the Hilbert transform.
     """
-    # Hilbert transform gives us the analytic signal
     analytic = signal.hilbert(data)
-    
-    # Envelope is the magnitude
     envelope = np.abs(analytic)
-    
     return envelope
 
 
@@ -155,29 +218,49 @@ def find_sync_pulses(data, sample_rate):
     Find APT sync pulses to determine line boundaries.
     
     APT sync pattern:
-    - 7 pulses of sync tone
-    - Distinctive frequency pattern
+    - Channel A sync: 7 cycles of 1040 Hz (7 * 1/1040 ≈ 6.73 ms)
+    - Channel B sync: 7 cycles of 832 Hz
     
-    We use correlation with expected sync pattern.
+    We correlate against a 1040 Hz sync template.
     """
+    # Generate sync A template (1040 Hz, 7 cycles)
+    sync_duration = 7 / APT_SYNC_FREQ
+    t_sync = np.arange(0, sync_duration, 1/sample_rate)
+    sync_template = np.sin(2 * np.pi * APT_SYNC_FREQ * t_sync)
+    
+    # Samples per APT line
     samples_per_line = int(sample_rate / APT_LINES_PER_SEC)
     
-    # Generate expected sync pulse pattern (simplified)
-    # Sync A is 7 cycles of 1040 Hz square wave
-    sync_duration = 0.005  # ~5ms sync pulse
-    t_sync = np.arange(0, sync_duration, 1/sample_rate)
-    sync_pattern = np.sin(2 * np.pi * SYNC_A_FREQ * t_sync)
-    sync_pattern = (sync_pattern > 0).astype(float)  # Square wave
+    # Correlate in chunks to save memory
+    chunk_size = min(len(data), sample_rate * 30)  # 30 seconds at a time
+    all_peaks = []
     
-    # Correlate to find sync positions
-    correlation = signal.correlate(data, sync_pattern, mode='valid')
+    for start in range(0, len(data) - len(sync_template), chunk_size):
+        end = min(start + chunk_size + len(sync_template), len(data))
+        chunk = data[start:end]
+        
+        correlation = np.correlate(chunk, sync_template, mode='valid')
+        correlation = np.abs(correlation)
+        
+        threshold = np.max(correlation) * 0.5
+        peaks, _ = signal.find_peaks(correlation, height=threshold, 
+                                      distance=int(samples_per_line * 0.9))
+        
+        # Offset peaks by chunk start position
+        all_peaks.extend(peaks + start)
     
-    # Find peaks in correlation
-    # These indicate sync pulse locations
-    threshold = np.max(correlation) * 0.5
-    peaks, _ = signal.find_peaks(correlation, height=threshold, distance=samples_per_line * 0.9)
+    # Remove duplicate peaks near chunk boundaries
+    if len(all_peaks) > 0:
+        all_peaks = np.array(sorted(set(all_peaks)))
+        # Remove peaks that are too close together
+        if len(all_peaks) > 1:
+            diffs = np.diff(all_peaks)
+            keep = np.concatenate(([True], diffs > samples_per_line * 0.5))
+            all_peaks = all_peaks[keep]
+    else:
+        all_peaks = np.array([], dtype=int)
     
-    return peaks, samples_per_line
+    return all_peaks, samples_per_line
 
 
 def extract_lines(data, sync_positions, samples_per_line):
@@ -187,7 +270,8 @@ def extract_lines(data, sync_positions, samples_per_line):
     lines = []
     
     for i, start in enumerate(sync_positions):
-        end = start + samples_per_line
+        start = int(start)
+        end = int(start + samples_per_line)
         
         if end > len(data):
             break
@@ -210,7 +294,11 @@ def normalize_image(image):
     image = np.clip(image, p_low, p_high)
     
     # Normalize to 0-255
-    image = (image - p_low) / (p_high - p_low) * 255
+    if p_high > p_low:
+        image = (image - p_low) / (p_high - p_low) * 255
+    else:
+        image = np.zeros_like(image)
+    
     image = image.astype(np.uint8)
     
     return image
@@ -220,6 +308,8 @@ def decode_apt(iq_filepath, output_dir=None, station_offset_hz=0):
     """
     Main decoding function.
     
+    Uses chunked processing for raw .bin files to stay within 16 GB RAM.
+    
     Args:
         iq_filepath: Path to I/Q file (.mat or .bin)
         output_dir: Output directory (default: same as input)
@@ -228,76 +318,107 @@ def decode_apt(iq_filepath, output_dir=None, station_offset_hz=0):
     Returns:
         Dictionary with results and metadata
     """
+    file_size = os.path.getsize(iq_filepath)
+    ext = os.path.splitext(iq_filepath)[1].lower()
+    
     print(f"Loading I/Q data from: {iq_filepath}")
-    iq, fs = load_iq(iq_filepath)
-    print(f"  Samples: {len(iq):,}")
-    print(f"  Sample rate: {fs/1e6:.2f} MHz")
-    print(f"  Duration: {len(iq)/fs:.1f} seconds")
+    print(f"  File size: {file_size / 1e9:.2f} GB")
     
-    # Frequency shift if needed
-    if station_offset_hz != 0:
-        print(f"  Applying frequency shift: {station_offset_hz} Hz")
-        t = np.arange(len(iq)) / fs
-        iq = iq * np.exp(-1j * 2 * np.pi * station_offset_hz * t)
+    # For large .bin files, use chunked processing
+    if ext == '.bin' and file_size > 500_000_000:  # > 500 MB
+        fs = 2.4e6
+        target_fs = 48000
+        
+        total_iq = file_size // 2
+        duration = total_iq / fs
+        print(f"  Samples: {total_iq:,}")
+        print(f"  Sample rate: {fs/1e6:.2f} MHz")
+        print(f"  Duration: {duration:.1f} seconds")
+        print(f"  Using chunked processing (memory-efficient mode)")
+        
+        # Chunked load + FM demod + decimate
+        fm_decimated, fs_decimated = load_iq_chunked(iq_filepath, fs, target_fs)
+        
+        # Lowpass filter at decimated rate
+        print("Lowpass filtering...")
+        lpf_cutoff = 17000  # Hz
+        fm_filtered = lowpass_filter(fm_decimated, lpf_cutoff, fs_decimated)
+        del fm_decimated
+        
+    else:
+        # Small files: load entirely
+        iq, fs = load_iq(iq_filepath)
+        print(f"  Samples: {len(iq):,}")
+        print(f"  Sample rate: {fs/1e6:.2f} MHz")
+        print(f"  Duration: {len(iq)/fs:.1f} seconds")
+        
+        # Frequency shift if needed
+        if station_offset_hz != 0:
+            print(f"  Applying frequency shift: {station_offset_hz} Hz")
+            t = np.arange(len(iq)) / fs
+            iq = iq * np.exp(-1j * 2 * np.pi * station_offset_hz * t)
+        
+        # FM Demodulation
+        print("FM demodulating...")
+        fm_audio = fm_demodulate(iq)
+        del iq
+        
+        # Lowpass filter
+        print("Lowpass filtering...")
+        lpf_cutoff = 17000
+        fm_filtered = lowpass_filter(fm_audio, lpf_cutoff, fs)
+        del fm_audio
+        
+        # Decimate
+        decim_factor = int(fs / 48000)
+        print(f"Decimating by {decim_factor}...")
+        fm_filtered = signal.decimate(fm_filtered, decim_factor, ftype='fir')
+        fs_decimated = fs / decim_factor
     
-    # Step 1: FM Demodulation
-    print("FM demodulating...")
-    fm_audio = fm_demodulate(iq)
-    
-    # Step 2: Lowpass filter to APT bandwidth (~17 kHz)
-    print("Lowpass filtering...")
-    lpf_cutoff = 17000  # Hz
-    fm_filtered = lowpass_filter(fm_audio, lpf_cutoff, fs)
-    
-    # Step 3: Decimate to manageable rate
-    # Go from 2.4 MHz to ~48 kHz first
-    decim_factor = int(fs / 48000)
-    print(f"Decimating by {decim_factor}...")
-    fm_decimated = signal.decimate(fm_filtered, decim_factor, ftype='fir')
-    fs_decimated = fs / decim_factor
-    
-    # Step 4: Resample to APT sample rate
+    # Resample to APT sample rate
     print(f"Resampling to {APT_SAMPLE_RATE} Hz...")
-    apt_signal = resample_signal(fm_decimated, fs_decimated, APT_SAMPLE_RATE)
+    apt_signal = resample_signal(fm_filtered, fs_decimated, APT_SAMPLE_RATE)
+    del fm_filtered
     
-    # Step 5: AM Demodulation
+    # AM Demodulation
     print("AM demodulating (envelope detection)...")
     envelope = am_demodulate(apt_signal)
+    del apt_signal
     
-    # Step 6: Find sync pulses
+    # Find sync pulses
     print("Finding sync pulses...")
     sync_positions, samples_per_line = find_sync_pulses(envelope, APT_SAMPLE_RATE)
     print(f"  Found {len(sync_positions)} sync pulses")
     
     if len(sync_positions) < 10:
         print("WARNING: Few sync pulses found. Falling back to fixed line extraction.")
-        # Fall back: assume lines start at regular intervals
-        num_lines = int(len(envelope) / samples_per_line)
-        sync_positions = np.arange(num_lines) * samples_per_line
+        # Use first sync as anchor if available, otherwise start at 0
+        start_offset = int(sync_positions[0]) if len(sync_positions) > 0 else 0
+        num_lines = int((len(envelope) - start_offset) / samples_per_line)
+        sync_positions = start_offset + np.arange(num_lines) * samples_per_line
         sync_positions = sync_positions.astype(int)
     
-    # Step 7: Extract image lines
+    # Extract image lines
     print("Extracting image lines...")
     image = extract_lines(envelope, sync_positions, samples_per_line)
     print(f"  Image shape: {image.shape}")
+    del envelope
     
-    # Step 8: Normalize for display
+    # Normalize for display
     print("Normalizing image...")
     image_normalized = normalize_image(image)
     
-    # Step 9: Save outputs
+    # Save outputs
     if output_dir is None:
         output_dir = os.path.dirname(iq_filepath)
     
     os.makedirs(output_dir, exist_ok=True)
     
     base_name = os.path.splitext(os.path.basename(iq_filepath))[0]
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     
     # Save PNG
     png_path = os.path.join(output_dir, f"{base_name}_decoded.png")
     
-    # Use PIL if available, otherwise matplotlib
     try:
         from PIL import Image
         img = Image.fromarray(image_normalized, mode='L')
@@ -310,50 +431,43 @@ def decode_apt(iq_filepath, output_dir=None, station_offset_hz=0):
     
     # Save metadata
     metadata = {
-        'input_file': iq_filepath,
-        'output_file': png_path,
-        'timestamp': timestamp,
-        'sample_rate_hz': fs,
-        'duration_sec': len(iq) / fs,
-        'image_width': image.shape[1],
-        'image_height': image.shape[0],
-        'sync_pulses_found': len(sync_positions),
-        'station_offset_hz': station_offset_hz
+        'source_file': os.path.basename(iq_filepath),
+        'decode_time': datetime.now().isoformat(),
+        'sample_rate': float(fs_decimated) if 'fs_decimated' in dir() else 48000.0,
+        'original_sample_rate': 2.4e6,
+        'duration_sec': float(file_size / 2 / 2.4e6) if ext == '.bin' else 0,
+        'sync_pulses_found': int(len(sync_positions)),
+        'image_shape': list(image_normalized.shape),
+        'station_offset_hz': station_offset_hz,
     }
     
     meta_path = os.path.join(output_dir, f"{base_name}_metadata.json")
     with open(meta_path, 'w') as f:
         json.dump(metadata, f, indent=2)
-    
     print(f"Saved metadata: {meta_path}")
     
     return {
         'image': image_normalized,
+        'image_path': png_path,
         'metadata': metadata,
-        'png_path': png_path
     }
 
 
-if __name__ == "__main__":
+# CLI entry point
+if __name__ == '__main__':
     import sys
     
     if len(sys.argv) < 2:
-        print("Usage: python decode_apt.py <iq_file.mat> [output_dir] [freq_offset_hz]")
-        print("")
-        print("Arguments:")
-        print("  iq_file.mat     - Raw I/Q capture file (.mat or .bin)")
-        print("  output_dir      - Output directory (optional)")
-        print("  freq_offset_hz  - Station frequency offset in Hz (optional)")
+        print("Usage: python decode_apt.py <iq_file> [output_dir]")
+        print("  Supports .mat and .bin (RTL-SDR raw uint8) files")
         sys.exit(1)
     
     iq_file = sys.argv[1]
-    out_dir = sys.argv[2] if len(sys.argv) > 2 else None
-    offset = float(sys.argv[3]) if len(sys.argv) > 3 else 0
+    out_dir = sys.argv[2] if len(sys.argv) > 2 else 'data/decoded'
     
-    result = decode_apt(iq_file, out_dir, offset)
+    result = decode_apt(iq_file, out_dir)
     
-    print("\n" + "="*50)
-    print("DECODE COMPLETE")
-    print("="*50)
-    print(f"Image: {result['png_path']}")
-    print(f"Size: {result['metadata']['image_width']} x {result['metadata']['image_height']}")
+    if result:
+        print(f"\nDecode complete: {result['image_path']}")
+        print(f"  Sync pulses: {result['metadata']['sync_pulses_found']}")
+        print(f"  Image size: {result['metadata']['image_shape']}")

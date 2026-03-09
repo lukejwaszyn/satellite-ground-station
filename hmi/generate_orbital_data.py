@@ -44,12 +44,12 @@ except ImportError as e:
 
 
 # =============================================================
-# Ground Station — State College, PA
+# Ground Station — Aliquippa, PA
 # Matches predict_passes.py and doppler_calc.py
 # =============================================================
-GS_LAT = 40.7934
-GS_LON = -77.8600
-GS_ELEV = 376.0
+GS_LAT = 40.6173
+GS_LON = -80.2543
+GS_ELEV = 220.0
 MIN_ELEVATION = 10.0
 
 # Speed of light (m/s) — matches doppler_calc.py
@@ -444,7 +444,7 @@ def generate_data(duration_hours=24, position_step_sec=30, output_path='orbital_
     print("=" * 60)
     print("SATCOM - Orbital Data Generator")
     print("=" * 60)
-    print(f"Ground Station: State College, PA")
+    print(f"Ground Station: Aliquippa, PA")
     print(f"  Lat: {GS_LAT} N  Lon: {GS_LON} E  Elev: {GS_ELEV}m")
     print(f"Duration: {duration_hours} hours")
     print(f"Position step: {position_step_sec} seconds")
@@ -518,7 +518,7 @@ def generate_data(duration_hours=24, position_step_sec=30, output_path='orbital_
         'duration_hours': duration_hours,
         'position_step_sec': position_step_sec,
         'ground_station': {
-            'name': 'State College, PA',
+            'name': 'Aliquippa, PA',
             'lat': GS_LAT,
             'lon': GS_LON,
             'elevation_m': GS_ELEV,
