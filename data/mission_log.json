@@ -224,5 +224,15 @@
     "decoded_image": null,
     "capture_success": true,
     "completed": "2026-03-07T03:04:28.250407+00:00"
+  },
+  {
+    "timestamp": "2026-03-12T18:11:22.036872+00:00",
+    "satellite": "NOAA 21",
+    "max_elevation_deg": 87.9,
+    "status": "complete",
+    "capture_file": "data/captures/NOAA_21_20260312_181027.bin",
+    "decoded_image": null,
+    "capture_success": true,
+    "completed": "2026-03-12T18:24:36.355315+00:00"
   }
 ]

@@ -65,14 +65,14 @@ sys.path.insert(0, str(BASE_DIR))
 DEFAULT_CONFIG = {
     'station': {
         'name': 'My Ground Station',
-        'lat': 40.6173,
-        'lon': -80.2543,
-        'elevation_m': 220.0,
+        'lat': 40.7934,
+        'lon': -77.8600,
+        'elevation_m': 376.0,
         'min_elevation_deg': 10.0,
     },
     'capture': {
         'sample_rate': 2.4e6,
-        'gain_db': 25,
+        'gain_db': 40,
         'pre_aos_margin_sec': 30,
         'post_los_margin_sec': 30,
         'primary_freq_hz': 137.1e6,
@@ -319,14 +319,35 @@ def run_capture_async(pass_info, config):
         # Try to decode if capture succeeded
         if mission_entry.get('capture_success') and mission_entry.get('capture_file'):
             try:
-                from python.demod.decode_apt import decode_apt
-                result = decode_apt(mission_entry['capture_file'], str(DECODED_DIR))
-                if result and result.get('png_path'):
-                    mission_entry['decoded_image'] = os.path.basename(result['png_path'])
-                    mission_entry['decode_success'] = True
-                    print(f"[CAPTURE] Decoded: {mission_entry['decoded_image']}")
+                sat_name = pass_info.get('satellite', '').upper()
+                
+                # Route to correct decoder based on satellite type
+                if 'METEOR' in sat_name:
+                    # METEOR uses LRPT (digital QPSK)
+                    print(f"[CAPTURE] Using LRPT decoder for {pass_info.get('satellite')}")
+                    from python.demod.decode_lrpt import decode_lrpt
+                    result = decode_lrpt(mission_entry['capture_file'], str(DECODED_DIR))
+                    if result and result.get('image_path'):
+                        mission_entry['decoded_image'] = os.path.basename(result['image_path'])
+                        mission_entry['decode_success'] = True
+                        mission_entry['decode_type'] = 'LRPT'
+                        mission_entry['channels_decoded'] = len(result.get('images', {}))
+                        print(f"[CAPTURE] LRPT decoded: {mission_entry['decoded_image']}")
+                        print(f"[CAPTURE]   Channels: {mission_entry['channels_decoded']}")
+                else:
+                    # NOAA uses APT (analog FM)
+                    print(f"[CAPTURE] Using APT decoder for {pass_info.get('satellite')}")
+                    from python.demod.decode_apt import decode_apt
+                    result = decode_apt(mission_entry['capture_file'], str(DECODED_DIR))
+                    if result and result.get('image_path'):
+                        mission_entry['decoded_image'] = os.path.basename(result['image_path'])
+                        mission_entry['decode_success'] = True
+                        mission_entry['decode_type'] = 'APT'
+                        print(f"[CAPTURE] APT decoded: {mission_entry['decoded_image']}")
+                
             except Exception as e:
                 print(f"[CAPTURE] Decode failed: {e}")
+                traceback.print_exc()
                 mission_entry['decode_success'] = False
         
         mission_entry['status'] = 'complete'
@@ -481,7 +502,12 @@ class SATCOMHandler(SimpleHTTPRequestHandler):
                 if p['max_el'] >= min_el:
                     if role_filter and sat_data.get('role') != role_filter:
                         continue
-                    pass_entry = {**p, 'satellite': sat_name, 'role': sat_data.get('role')}
+                    pass_entry = {
+                        **p, 
+                        'satellite': sat_name, 
+                        'role': sat_data.get('role'),
+                        'signal_type': 'LRPT' if 'METEOR' in sat_name.upper() else 'APT' if sat_data.get('freq_hz') else None,
+                    }
                     passes.append(pass_entry)
         
         # Sort by AOS time

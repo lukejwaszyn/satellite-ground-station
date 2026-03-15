@@ -223,6 +223,21 @@
   .mission-log-item .sat-name { color: var(--text); font-weight: 500; }
   .mission-log-item .status-ok { color: var(--success); }
   .mission-log-item .status-fail { color: var(--danger); }
+
+  /* ---------- Signal type badges ---------- */
+  .signal-badge { 
+    font-family: 'JetBrains Mono', monospace; font-size: 8px; 
+    padding: 1px 5px; border-radius: 3px; letter-spacing: 1px; 
+    display: inline-block; margin-left: 6px; vertical-align: middle;
+  }
+  .signal-badge.apt { background: rgba(139,92,246,0.15); color: #a78bfa; border: 1px solid rgba(139,92,246,0.3); }
+  .signal-badge.lrpt { background: rgba(251,146,60,0.15); color: #fb923c; border: 1px solid rgba(251,146,60,0.3); }
+  .signal-badge.track { background: rgba(100,116,139,0.1); color: #475569; border: 1px solid rgba(100,116,139,0.2); }
+
+  /* ---------- Pass table signal type ---------- */
+  .pass-table .signal-type { font-size: 9px; letter-spacing: 1px; }
+  .pass-table .signal-type.apt { color: #a78bfa; }
+  .pass-table .signal-type.lrpt { color: #fb923c; }
 </style>
 </head>
 <body>
@@ -315,6 +330,7 @@
         <th onclick="sortPassTable('duration')" id="th-duration">Duration</th>
         <th onclick="sortPassTable('elevation')" id="th-elevation">Max Elev</th>
         <th onclick="sortPassTable('freq')" id="th-freq">Frequency</th>
+        <th onclick="sortPassTable('signal')" id="th-signal">Signal</th>
         <th onclick="sortPassTable('status')" id="th-status">Status</th>
       </tr>
     </thead>
@@ -323,7 +339,7 @@
 </div>
 
 <div class="bottom-bar">
-  <span id="bottom-info">GS: 40.7934°N 77.8600°W • NOAA APT 137 MHz VHF</span>
+  <span id="bottom-info">GS: 40.7934°N 77.8600°W • NOAA APT + METEOR LRPT • 137 MHz VHF</span>
   <span class="utc-clock" id="utc-clock">—</span>
 </div>
 
@@ -410,10 +426,12 @@ function generateDemoData() {
     const nowISO = new Date(now * 1000).toISOString();
 
     const demoSats = {
-        'NOAA 15': { freq_hz: 137.62e6, freq_mhz: 137.62, color: '#f472b6', norad_id: 25338, inclination_deg: 98.73, period_min: 101.2, raan0: 45, meanAnomaly0: 0 },
-        'NOAA 18': { freq_hz: 137.9125e6, freq_mhz: 137.9125, color: '#38bdf8', norad_id: 28654, inclination_deg: 99.0, period_min: 102.1, raan0: 160, meanAnomaly0: 120 },
-        'NOAA 19': { freq_hz: 137.1e6, freq_mhz: 137.1, color: '#a78bfa', norad_id: 33591, inclination_deg: 99.2, period_min: 102.0, raan0: 280, meanAnomaly0: 240 },
-        'NOAA 20': { freq_hz: 137.1e6, freq_mhz: 137.1, color: '#34d399', norad_id: 43013, inclination_deg: 98.7, period_min: 101.4, raan0: 70, meanAnomaly0: 60 },
+        'NOAA 15': { freq_hz: 137.62e6, freq_mhz: 137.62, color: '#f472b6', norad_id: 25338, inclination_deg: 98.73, period_min: 101.2, raan0: 45, meanAnomaly0: 0, role: 'weather', signal_type: 'APT' },
+        'NOAA 18': { freq_hz: 137.9125e6, freq_mhz: 137.9125, color: '#38bdf8', norad_id: 28654, inclination_deg: 99.0, period_min: 102.1, raan0: 160, meanAnomaly0: 120, role: 'weather', signal_type: 'APT' },
+        'NOAA 19': { freq_hz: 137.1e6, freq_mhz: 137.1, color: '#a78bfa', norad_id: 33591, inclination_deg: 99.2, period_min: 102.0, raan0: 280, meanAnomaly0: 240, role: 'weather', signal_type: 'APT' },
+        'NOAA 20': { freq_hz: 137.1e6, freq_mhz: 137.1, color: '#34d399', norad_id: 43013, inclination_deg: 98.7, period_min: 101.4, raan0: 70, meanAnomaly0: 60, role: 'primary', signal_type: 'APT' },
+        'METEOR-M2 3': { freq_hz: 137.9e6, freq_mhz: 137.9, color: '#fb923c', norad_id: 57166, inclination_deg: 98.8, period_min: 99.6, raan0: 200, meanAnomaly0: 180, role: 'weather', signal_type: 'LRPT' },
+        'METEOR-M2 4': { freq_hz: 137.1e6, freq_mhz: 137.1, color: '#f97316', norad_id: 59051, inclination_deg: 98.9, period_min: 99.4, raan0: 330, meanAnomaly0: 300, role: 'weather', signal_type: 'LRPT' },
     };
 
     const satellites = {};
@@ -519,6 +537,8 @@ function generateDemoData() {
         satellites[name] = {
             name, tle_name: name, norad_id: sat.norad_id,
             freq_hz: sat.freq_hz, freq_mhz: sat.freq_mhz, color: sat.color,
+            role: sat.role || 'weather',
+            signal_type: sat.signal_type || 'APT',
             epoch: nowISO, inclination_deg: sat.inclination_deg, period_min: sat.period_min,
             positions, passes,
         };
@@ -676,42 +696,110 @@ function createStars() {
 }
 
 function createEarth() {
-    const geo = new THREE.SphereGeometry(1, 96, 64);
-    const can = document.createElement('canvas'); can.width = 1024; can.height = 512;
-    const ctx = can.getContext('2d');
+    const geo = new THREE.SphereGeometry(1, 128, 80);
 
-    // Dark ocean base
-    ctx.fillStyle = '#0d1520'; ctx.fillRect(0, 0, 1024, 512);
+    // Load real NASA Blue Marble texture, with canvas fallback
+    const loader = new THREE.TextureLoader();
+    const texUrl = 'https://unpkg.com/three-globe@2.31.1/example/img/earth-blue-marble.jpg';
 
-    // Continents (simplified filled regions)
-    ctx.fillStyle = 'rgba(30, 58, 80, 0.7)';
-    const continents = [
-        [250,140,110,80,-0.2], [320,300,50,90,0.15], [520,130,50,40,0],
-        [530,270,55,85,0], [680,140,130,70,0], [790,330,50,35,0.3],
-    ];
-    continents.forEach(([x,y,rx,ry,rot]) => { ctx.beginPath(); ctx.ellipse(x,y,rx,ry,rot,0,Math.PI*2); ctx.fill(); });
-
-    // Antarctica
-    ctx.fillStyle = 'rgba(40, 70, 90, 0.4)'; ctx.fillRect(0, 470, 1024, 42);
-
-    // Grid
-    ctx.strokeStyle = 'rgba(56, 189, 248, 0.06)'; ctx.lineWidth = 0.5;
-    for (let i = 0; i <= 180; i += 15) { ctx.beginPath(); ctx.moveTo(0, i*512/180); ctx.lineTo(1024, i*512/180); ctx.stroke(); }
-    for (let i = 0; i <= 360; i += 15) { ctx.beginPath(); ctx.moveTo(i*1024/360, 0); ctx.lineTo(i*1024/360, 512); ctx.stroke(); }
-
-    // City lights
-    [[250,155],[230,135],[270,165],[210,150],[320,280],[310,310],[520,125],[505,140],[540,120],[530,250],[540,220],[650,130],[700,155],[720,170],[760,140],[790,325]].forEach(([x,y]) => {
-        ctx.fillStyle = 'rgba(245, 210, 120, 0.3)'; ctx.beginPath();
-        ctx.arc(x + Math.random()*20-10, y + Math.random()*20-10, 2 + Math.random()*3, 0, Math.PI*2); ctx.fill();
+    // Build Earth mesh with placeholder first, swap texture when loaded
+    const earthMat = new THREE.MeshPhongMaterial({
+        color: 0x2266aa, specular: 0x111122, shininess: 25,
     });
-
-    const tex = new THREE.CanvasTexture(can);
-    earthMesh = new THREE.Mesh(geo, new THREE.MeshPhongMaterial({ map: tex, specular: 0x111111, shininess: 15 }));
+    earthMesh = new THREE.Mesh(geo, earthMat);
     scene.add(earthMesh);
 
-    // Atmosphere
-    scene.add(new THREE.Mesh(new THREE.SphereGeometry(1.02, 64, 32), new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.04, side: THREE.BackSide })));
-    scene.add(new THREE.Mesh(new THREE.SphereGeometry(1.08, 32, 16), new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.02, side: THREE.BackSide })));
+    loader.load(texUrl,
+        (tex) => {
+            // Success — real Earth texture
+            tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+            earthMesh.material.map = tex;
+            earthMesh.material.color.set(0xffffff);
+            earthMesh.material.needsUpdate = true;
+            console.log('[EARTH] NASA Blue Marble texture loaded');
+        },
+        undefined,
+        () => {
+            // Fallback — generate canvas texture with coastline polygons
+            console.log('[EARTH] Texture load failed, using canvas fallback');
+            const can = document.createElement('canvas'); can.width = 2048; can.height = 1024;
+            const ctx = can.getContext('2d');
+
+            // Ocean
+            ctx.fillStyle = '#0d1826'; ctx.fillRect(0, 0, 2048, 1024);
+
+            // Coastline polygons (equirectangular, lon -180..180 → x 0..2048, lat 90..-90 → y 0..1024)
+            function ll2px(lon, lat) { return [(lon + 180) / 360 * 2048, (90 - lat) / 180 * 1024]; }
+            function drawLand(coords) {
+                ctx.beginPath();
+                const [sx, sy] = ll2px(coords[0][0], coords[0][1]);
+                ctx.moveTo(sx, sy);
+                for (let i = 1; i < coords.length; i++) {
+                    const [x, y] = ll2px(coords[i][0], coords[i][1]);
+                    ctx.lineTo(x, y);
+                }
+                ctx.closePath(); ctx.fill();
+            }
+
+            ctx.fillStyle = 'rgba(22, 50, 68, 0.85)';
+
+            // North America (simplified outline)
+            drawLand([[-130,50],[-125,60],[-120,68],[-100,70],[-85,72],[-60,65],[-55,50],[-65,44],[-70,41],[-75,35],[-80,30],[-82,25],[-90,28],[-97,26],[-100,30],[-105,32],[-110,32],[-115,33],[-120,35],[-122,40],[-124,42],[-125,48],[-130,50]]);
+            // Central America
+            drawLand([[-100,20],[-97,26],[-90,28],[-87,22],[-85,15],[-83,10],[-80,8],[-78,9],[-83,12],[-87,15],[-92,16],[-96,17],[-100,20]]);
+            // South America
+            drawLand([[-80,8],[-75,12],[-68,12],[-60,5],[-52,3],[-50,-2],[-45,-5],[-38,-8],[-35,-12],[-38,-18],[-42,-23],[-48,-28],[-53,-33],[-58,-38],[-63,-42],[-67,-46],[-68,-52],[-70,-50],[-72,-42],[-70,-35],[-70,-18],[-75,-5],[-77,0],[-80,8]]);
+            // Europe
+            drawLand([[-10,36],[-8,44],[0,44],[3,47],[5,48],[10,46],[15,45],[20,42],[28,42],[30,45],[25,50],[20,55],[25,58],[22,62],[15,65],[10,62],[5,58],[0,52],[-5,48],[-10,44],[-10,36]]);
+            // Africa
+            drawLand([[-18,15],[-15,28],[-5,36],[10,37],[15,35],[25,32],[32,30],[35,25],[42,12],[50,2],[42,-5],[40,-12],[35,-22],[30,-30],[28,-34],[22,-34],[18,-28],[12,-18],[10,-5],[5,5],[0,6],[-5,5],[-10,6],[-15,11],[-18,15]]);
+            // Asia (simplified)
+            drawLand([[28,42],[35,42],[40,42],[45,40],[50,38],[55,42],[60,45],[65,48],[70,52],[75,55],[80,55],[90,50],[100,48],[105,45],[110,42],[115,40],[120,38],[122,32],[120,25],[118,22],[110,20],[105,15],[100,14],[98,16],[100,22],[95,25],[88,22],[82,18],[78,22],[72,20],[68,24],[62,25],[55,28],[50,30],[45,35],[40,38],[35,40],[28,42]]);
+            // Russia/Siberia extension
+            drawLand([[30,50],[25,55],[30,60],[40,62],[50,60],[60,62],[70,65],[80,68],[90,70],[100,72],[110,70],[120,68],[130,65],[140,62],[150,60],[160,62],[170,65],[180,65],[180,55],[170,52],[160,50],[150,48],[140,48],[130,50],[120,52],[110,50],[100,48],[90,50],[80,55],[70,52],[60,45],[50,42],[40,42],[30,50]]);
+            // India
+            drawLand([[68,24],[72,20],[78,22],[82,18],[80,12],[78,8],[76,10],[73,15],[68,24]]);
+            // Southeast Asia
+            drawLand([[100,14],[105,15],[110,20],[118,22],[115,15],[110,5],[108,2],[105,5],[102,7],[100,14]]);
+            // Australia
+            drawLand([[115,-14],[120,-15],[130,-14],[135,-16],[140,-18],[145,-20],[148,-24],[150,-28],[148,-32],[145,-35],[140,-38],[135,-35],[130,-32],[125,-33],[118,-35],[115,-32],[114,-28],[114,-24],[115,-20],[113,-16],[115,-14]]);
+            // Japan
+            drawLand([[130,31],[132,34],[136,36],[140,40],[142,43],[144,44],[142,40],[138,36],[134,33],[130,31]]);
+            // UK/Ireland
+            drawLand([[-10,50],[-6,52],[-5,55],[-3,57],[-2,58],[0,56],[2,54],[2,52],[0,50],[-3,50],[-6,50],[-10,50]]);
+            // Greenland
+            drawLand([[-55,60],[-50,62],[-45,65],[-35,68],[-25,72],[-20,76],[-25,80],[-35,82],[-45,82],[-55,78],[-58,74],[-55,68],[-55,60]]);
+            // Antarctica
+            ctx.fillStyle = 'rgba(30, 55, 70, 0.5)';
+            ctx.fillRect(0, 945, 2048, 80);
+
+            // Grid lines
+            ctx.strokeStyle = 'rgba(56, 189, 248, 0.04)'; ctx.lineWidth = 0.5;
+            for (let lat = -90; lat <= 90; lat += 30) {
+                const y = (90 - lat) / 180 * 1024;
+                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(2048, y); ctx.stroke();
+            }
+            for (let lon = -180; lon <= 180; lon += 30) {
+                const x = (lon + 180) / 360 * 2048;
+                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, 1024); ctx.stroke();
+            }
+
+            const fallbackTex = new THREE.CanvasTexture(can);
+            earthMesh.material.map = fallbackTex;
+            earthMesh.material.color.set(0xffffff);
+            earthMesh.material.needsUpdate = true;
+        }
+    );
+
+    // Atmosphere layers
+    scene.add(new THREE.Mesh(
+        new THREE.SphereGeometry(1.012, 64, 32),
+        new THREE.MeshBasicMaterial({ color: 0x4499ff, transparent: true, opacity: 0.04, side: THREE.BackSide })
+    ));
+    scene.add(new THREE.Mesh(
+        new THREE.SphereGeometry(1.05, 48, 24),
+        new THREE.MeshBasicMaterial({ color: 0x2266cc, transparent: true, opacity: 0.02, side: THREE.BackSide })
+    ));
 }
 
 function createGroundStation() {
@@ -819,7 +907,7 @@ function buildUI() {
     document.getElementById('gs-name').textContent = gs.name;
     document.getElementById('gs-coords').textContent = `${gs.lat}°N  ${Math.abs(gs.lon)}°W  ${gs.elevation_m}m ASL`;
     document.getElementById('sat-count').textContent = `${satKeys.length} TARGETS`;
-    document.getElementById('bottom-info').textContent = `GS: ${gs.lat}°N ${Math.abs(gs.lon)}°W • NOAA APT 137 MHz VHF • Min El: ${gs.min_elevation_deg}°`;
+    document.getElementById('bottom-info').textContent = `GS: ${gs.lat}°N ${Math.abs(gs.lon)}°W • NOAA APT + METEOR LRPT • 137 MHz VHF • Min El: ${gs.min_elevation_deg}°`;
 
     const src = document.getElementById('data-source');
     if (dataMode === 'live' && serverMode) { src.className = 'data-source live'; src.textContent = `SATCOM SERVER • SKYFIELD SGP4 • ${new Date(orbitalData.generated_utc).toUTCString().slice(0,22)}`; }
@@ -832,9 +920,19 @@ function buildUI() {
     satKeys.forEach((name, i) => {
         const sat = orbitalData.satellites[name];
         const role = sat.role || 'display';
-        const roleLabel = role === 'primary' ? 'PRIMARY' : role === 'weather' ? 'WX' : '';
         const freqStr = sat.freq_mhz ? `${sat.freq_mhz} MHz` : `NORAD ${sat.norad_id}`;
         const detailStr = `${freqStr} • ${sat.inclination_deg}° inc • ${sat.period_min}min`;
+
+        // Signal type badge
+        let signalBadge = '';
+        if (role === 'primary' || role === 'weather') {
+            const isLRPT = name.toUpperCase().includes('METEOR');
+            signalBadge = isLRPT 
+                ? '<span class="signal-badge lrpt">LRPT</span>' 
+                : '<span class="signal-badge apt">APT</span>';
+        } else {
+            signalBadge = '<span class="signal-badge track">TRACK</span>';
+        }
 
         const div = document.createElement('div');
         div.className = 'sat-item'; div.id = `sat-item-${i}`;
@@ -842,7 +940,7 @@ function buildUI() {
         div.innerHTML = `
             <div class="sat-dot" style="background:${sat.color};box-shadow:0 0 8px ${sat.color}"></div>
             <div class="sat-info">
-                <div class="sat-name">${sat.name}${roleLabel ? ` <span style="font-size:9px;color:${role === 'primary' ? 'var(--success)' : 'var(--text-dim)'};font-family:JetBrains Mono,monospace;letter-spacing:1px;">${roleLabel}</span>` : ''}</div>
+                <div class="sat-name">${sat.name}${signalBadge}</div>
                 <div class="sat-freq">${detailStr}</div>
             </div>
             <div class="sat-status below" id="sat-status-${i}">BELOW</div>`;
@@ -1501,12 +1599,17 @@ function buildPassSchedule() {
         
         const rowClass = `${elevClass}${p.status === 'active' ? ' active-pass' : ''}`;
         
+        const signalType = p.satellite.toUpperCase().includes('METEOR') ? 'LRPT' : 
+                          (p.freq_mhz ? 'APT' : '\u2014');
+        const signalClass = signalType === 'LRPT' ? 'lrpt' : (signalType === 'APT' ? 'apt' : '');
+        
         return `<tr class="${rowClass}">
             <td><span class="sat-color-dot" style="background:${p.color}"></span>${p.satellite}</td>
             <td>${localDate} ${localTime}<br><span style="color:var(--text-dim);font-size:9px;">${timeUntilStr}</span></td>
             <td>${durMin}m ${durSec}s</td>
             <td>${p.max_el.toFixed(1)}\u00B0</td>
             <td>${p.freq_mhz ? p.freq_mhz + ' MHz' : '\u2014'}</td>
+            <td><span class="signal-type ${signalClass}">${signalType}</span></td>
             <td>${p.role === 'primary' || p.role === 'weather' ? '<span style="color:var(--success);">CAPTURE</span>' : '<span style="color:var(--text-dim);">TRACK</span>'}</td>
         </tr>`;
     }).join('');

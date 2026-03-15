@@ -1,0 +1,26 @@
+{
+  "satellite": "NOAA 21",
+  "center_freq_hz": 137500000.0,
+  "aos_utc": "2026-03-12T18:10:27.282631+00:00",
+  "los_utc": "2026-03-12T18:21:15.252240+00:00",
+  "duration_sec": 647.969609,
+  "time_step_sec": 137100000,
+  "times_sec": [
+    0
+  ],
+  "doppler_hz": [
+    3010.609514290963
+  ],
+  "elevations_deg": [
+    9.966109289764237
+  ],
+  "azimuths_deg": [
+    163.813508667836
+  ],
+  "ranges_km": [
+    2425.7488856214723
+  ],
+  "max_doppler_hz": 3010.609514290963,
+  "min_doppler_hz": 3010.609514290963,
+  "doppler_rate_hz_per_sec": 0.0
+}
