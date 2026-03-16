@@ -411,6 +411,8 @@ class SATCOMHandler(SimpleHTTPRequestHandler):
             self.handle_get_config()
         elif path.startswith('/api/decoded/'):
             self.handle_decoded_image(path)
+        elif path == '/api/daemon':
+            self.handle_daemon_status()
         
         # ---- Static Files (HMI) ----
         elif path == '/' or path == '/index.html':
@@ -525,7 +527,21 @@ class SATCOMHandler(SimpleHTTPRequestHandler):
         status['decoded_images'] = len(list(DECODED_DIR.glob('*.png'))) if DECODED_DIR.exists() else 0
         status['config_loaded'] = CONFIG_PATH.exists()
         
+        # Include daemon status
+        if hasattr(self.__class__, 'capture_daemon') and self.__class__.capture_daemon:
+            daemon_status = self.__class__.capture_daemon.get_status()
+            status['daemon'] = daemon_status
+        else:
+            status['daemon'] = {'enabled': False, 'running': False}
+        
         self.send_json(status)
+    
+    def handle_daemon_status(self):
+        """Return detailed daemon status."""
+        if hasattr(self.__class__, 'capture_daemon') and self.__class__.capture_daemon:
+            self.send_json(self.__class__.capture_daemon.get_status())
+        else:
+            self.send_json({'enabled': False, 'running': False, 'error': 'Daemon not initialized'})
     
     def handle_missions(self):
         """Return mission history."""
@@ -694,12 +710,15 @@ Examples:
   python satcom_server.py                    # Start on default port 8080
   python satcom_server.py --port 3000        # Custom port
   python satcom_server.py --no-generate      # Skip initial orbital data generation
+  python satcom_server.py --no-daemon        # Disable autonomous capture
 """
     )
     parser.add_argument('--port', type=int, default=None,
                         help='HTTP port (default: from config or 8080)')
     parser.add_argument('--no-generate', action='store_true',
                         help='Skip initial orbital data generation')
+    parser.add_argument('--no-daemon', action='store_true',
+                        help='Disable autonomous capture daemon')
     
     args = parser.parse_args()
     
@@ -745,6 +764,37 @@ Examples:
     else:
         print("[INIT] Skipping orbital data generation (--no-generate)")
     
+    # Start autonomous capture daemon
+    capture_daemon = None
+    if not args.no_generate and not args.no_daemon:
+        try:
+            from python.capture_daemon import create_daemon
+            
+            def get_orbital():
+                return state.cached_orbital_data
+            
+            capture_daemon = create_daemon(
+                state=state,
+                config_func=load_config,
+                orbital_data_func=get_orbital,
+                capture_func=run_capture_async,
+                log_func=append_mission_log,
+                decoded_dir=str(DECODED_DIR),
+            )
+            
+            daemon_config = load_config().get('daemon', {})
+            if daemon_config.get('enabled', True):
+                capture_daemon.start()
+            else:
+                print("[INIT] Capture daemon disabled in config")
+        except ImportError as e:
+            print(f"[INIT] Capture daemon not available: {e}")
+        except Exception as e:
+            print(f"[INIT] Capture daemon failed to start: {e}")
+    
+    # Store daemon reference for API access
+    SATCOMHandler.capture_daemon = capture_daemon
+    
     # Start server
     server = HTTPServer(('0.0.0.0', port), SATCOMHandler)
     
@@ -755,6 +805,8 @@ Examples:
         server.serve_forever()
     except KeyboardInterrupt:
         print("\n[SERVER] Shutting down...")
+        if capture_daemon:
+            capture_daemon.stop()
         server.shutdown()
 
 
