@@ -44,12 +44,12 @@ except ImportError as e:
 
 
 # =============================================================
-# Ground Station — Aliquippa, PA
+# Ground Station — State College, PA
 # Matches predict_passes.py and doppler_calc.py
 # =============================================================
-GS_LAT = 40.6173
-GS_LON = -80.2543
-GS_ELEV = 220.0
+GS_LAT = 40.7934
+GS_LON = -77.8600
+GS_ELEV = 376.0
 MIN_ELEVATION = 10.0
 
 # Speed of light (m/s) — matches doppler_calc.py
@@ -73,25 +73,17 @@ C = 299792458.0
 #   'individual' means fetch by NORAD ID directly.
 # =============================================================
 TRACKED_SATS = {
-    # === Primary imaging target ===
-    'NOAA 20': {
+    # === Primary imaging targets (APT-capable) ===
+    'NOAA 19': {
         'freq_hz': 137.1000e6,
-        'color': '#34d399',
-        'norad_id': 43013,
+        'color': '#a78bfa',
+        'norad_id': 33591,
         'role': 'primary',
-        'group': 'weather',
-        'search_names': ['NOAA 20', 'NOAA-20', 'JPSS-1'],
+        'group': 'individual',
+        'search_names': ['NOAA 19', 'NOAA-19'],
     },
 
-    # === Weather constellation ===
-    'NOAA 21': {
-        'freq_hz': 137.1000e6,
-        'color': '#2dd4bf',
-        'norad_id': 54234,
-        'role': 'weather',
-        'group': 'weather',
-        'search_names': ['NOAA 21', 'NOAA-21', 'JPSS-2'],
-    },
+    # === Weather constellation (capturable) ===
     'NOAA 18': {
         'freq_hz': 137.9125e6,
         'color': '#38bdf8',
@@ -99,14 +91,6 @@ TRACKED_SATS = {
         'role': 'weather',
         'group': 'individual',
         'search_names': ['NOAA 18', 'NOAA-18'],
-    },
-    'NOAA 19': {
-        'freq_hz': 137.1000e6,
-        'color': '#a78bfa',
-        'norad_id': 33591,
-        'role': 'weather',
-        'group': 'individual',
-        'search_names': ['NOAA 19', 'NOAA-19'],
     },
     'NOAA 15': {
         'freq_hz': 137.6200e6,
@@ -131,6 +115,25 @@ TRACKED_SATS = {
         'role': 'weather',
         'group': 'weather',
         'search_names': ['METEOR-M2 4', 'METEOR-M 2-4', 'METEOR M2-4'],
+    },
+
+    # === JPSS series — NO APT transmission, HRD only (7.8 GHz) ===
+    # Tracked for orbital awareness, not capturable at 137 MHz
+    'NOAA 20': {
+        'freq_hz': None,
+        'color': '#34d399',
+        'norad_id': 43013,
+        'role': 'display',
+        'group': 'weather',
+        'search_names': ['NOAA 20', 'NOAA-20', 'JPSS-1'],
+    },
+    'NOAA 21': {
+        'freq_hz': None,
+        'color': '#2dd4bf',
+        'norad_id': 54234,
+        'role': 'display',
+        'group': 'weather',
+        'search_names': ['NOAA 21', 'NOAA-21', 'JPSS-2'],
     },
 
     # === Display satellites ===
@@ -444,7 +447,7 @@ def generate_data(duration_hours=24, position_step_sec=30, output_path='orbital_
     print("=" * 60)
     print("SATCOM - Orbital Data Generator")
     print("=" * 60)
-    print(f"Ground Station: Aliquippa, PA")
+    print(f"Ground Station: State College, PA")
     print(f"  Lat: {GS_LAT} N  Lon: {GS_LON} E  Elev: {GS_ELEV}m")
     print(f"Duration: {duration_hours} hours")
     print(f"Position step: {position_step_sec} seconds")
@@ -518,7 +521,7 @@ def generate_data(duration_hours=24, position_step_sec=30, output_path='orbital_
         'duration_hours': duration_hours,
         'position_step_sec': position_step_sec,
         'ground_station': {
-            'name': 'Aliquippa, PA',
+            'name': 'State College, PA',
             'lat': GS_LAT,
             'lon': GS_LON,
             'elevation_m': GS_ELEV,
