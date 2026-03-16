@@ -223,6 +223,21 @@
   .mission-log-item .sat-name { color: var(--text); font-weight: 500; }
   .mission-log-item .status-ok { color: var(--success); }
   .mission-log-item .status-fail { color: var(--danger); }
+
+  /* ---------- Signal type badges ---------- */
+  .signal-badge { 
+    font-family: 'JetBrains Mono', monospace; font-size: 8px; 
+    padding: 1px 5px; border-radius: 3px; letter-spacing: 1px; 
+    display: inline-block; margin-left: 6px; vertical-align: middle;
+  }
+  .signal-badge.apt { background: rgba(139,92,246,0.15); color: #a78bfa; border: 1px solid rgba(139,92,246,0.3); }
+  .signal-badge.lrpt { background: rgba(251,146,60,0.15); color: #fb923c; border: 1px solid rgba(251,146,60,0.3); }
+  .signal-badge.track { background: rgba(100,116,139,0.1); color: #475569; border: 1px solid rgba(100,116,139,0.2); }
+
+  /* ---------- Pass table signal type ---------- */
+  .pass-table .signal-type { font-size: 9px; letter-spacing: 1px; }
+  .pass-table .signal-type.apt { color: #a78bfa; }
+  .pass-table .signal-type.lrpt { color: #fb923c; }
 </style>
 </head>
 <body>
@@ -315,6 +330,7 @@
         <th onclick="sortPassTable('duration')" id="th-duration">Duration</th>
         <th onclick="sortPassTable('elevation')" id="th-elevation">Max Elev</th>
         <th onclick="sortPassTable('freq')" id="th-freq">Frequency</th>
+        <th onclick="sortPassTable('signal')" id="th-signal">Signal</th>
         <th onclick="sortPassTable('status')" id="th-status">Status</th>
       </tr>
     </thead>
@@ -323,7 +339,7 @@
 </div>
 
 <div class="bottom-bar">
-  <span id="bottom-info">GS: 40.7934°N 77.8600°W • NOAA APT 137 MHz VHF</span>
+  <span id="bottom-info">GS: 40.7934°N 77.8600°W • NOAA APT + METEOR LRPT • 137 MHz VHF</span>
   <span class="utc-clock" id="utc-clock">—</span>
 </div>
 
@@ -410,10 +426,12 @@ function generateDemoData() {
     const nowISO = new Date(now * 1000).toISOString();
 
     const demoSats = {
-        'NOAA 15': { freq_hz: 137.62e6, freq_mhz: 137.62, color: '#f472b6', norad_id: 25338, inclination_deg: 98.73, period_min: 101.2, raan0: 45, meanAnomaly0: 0 },
-        'NOAA 18': { freq_hz: 137.9125e6, freq_mhz: 137.9125, color: '#38bdf8', norad_id: 28654, inclination_deg: 99.0, period_min: 102.1, raan0: 160, meanAnomaly0: 120 },
-        'NOAA 19': { freq_hz: 137.1e6, freq_mhz: 137.1, color: '#a78bfa', norad_id: 33591, inclination_deg: 99.2, period_min: 102.0, raan0: 280, meanAnomaly0: 240 },
-        'NOAA 20': { freq_hz: 137.1e6, freq_mhz: 137.1, color: '#34d399', norad_id: 43013, inclination_deg: 98.7, period_min: 101.4, raan0: 70, meanAnomaly0: 60 },
+        'NOAA 15': { freq_hz: 137.62e6, freq_mhz: 137.62, color: '#f472b6', norad_id: 25338, inclination_deg: 98.73, period_min: 101.2, raan0: 45, meanAnomaly0: 0, role: 'weather', signal_type: 'APT' },
+        'NOAA 18': { freq_hz: 137.9125e6, freq_mhz: 137.9125, color: '#38bdf8', norad_id: 28654, inclination_deg: 99.0, period_min: 102.1, raan0: 160, meanAnomaly0: 120, role: 'weather', signal_type: 'APT' },
+        'NOAA 19': { freq_hz: 137.1e6, freq_mhz: 137.1, color: '#a78bfa', norad_id: 33591, inclination_deg: 99.2, period_min: 102.0, raan0: 280, meanAnomaly0: 240, role: 'weather', signal_type: 'APT' },
+        'NOAA 20': { freq_hz: 137.1e6, freq_mhz: 137.1, color: '#34d399', norad_id: 43013, inclination_deg: 98.7, period_min: 101.4, raan0: 70, meanAnomaly0: 60, role: 'primary', signal_type: 'APT' },
+        'METEOR-M2 3': { freq_hz: 137.9e6, freq_mhz: 137.9, color: '#fb923c', norad_id: 57166, inclination_deg: 98.8, period_min: 99.6, raan0: 200, meanAnomaly0: 180, role: 'weather', signal_type: 'LRPT' },
+        'METEOR-M2 4': { freq_hz: 137.1e6, freq_mhz: 137.1, color: '#f97316', norad_id: 59051, inclination_deg: 98.9, period_min: 99.4, raan0: 330, meanAnomaly0: 300, role: 'weather', signal_type: 'LRPT' },
     };
 
     const satellites = {};
@@ -519,6 +537,8 @@ function generateDemoData() {
         satellites[name] = {
             name, tle_name: name, norad_id: sat.norad_id,
             freq_hz: sat.freq_hz, freq_mhz: sat.freq_mhz, color: sat.color,
+            role: sat.role || 'weather',
+            signal_type: sat.signal_type || 'APT',
             epoch: nowISO, inclination_deg: sat.inclination_deg, period_min: sat.period_min,
             positions, passes,
         };
@@ -676,42 +696,204 @@ function createStars() {
 }
 
 function createEarth() {
-    const geo = new THREE.SphereGeometry(1, 96, 64);
-    const can = document.createElement('canvas'); can.width = 1024; can.height = 512;
+    const geo = new THREE.SphereGeometry(1, 128, 80);
+
+    const earthMat = new THREE.MeshPhongMaterial({
+        color: 0x2266aa, specular: 0x111122, shininess: 25,
+    });
+    earthMesh = new THREE.Mesh(geo, earthMat);
+    scene.add(earthMesh);
+
+    // Try multiple texture sources — local file first (served by satcom_server), then CDN fallbacks
+    const texUrls = [
+        'earth-texture.jpg',
+        '/earth-texture.jpg',
+        'https://unpkg.com/three-globe@2.31.1/example/img/earth-blue-marble.jpg',
+        'https://cdn.jsdelivr.net/npm/three-globe@2.31.1/example/img/earth-blue-marble.jpg',
+    ];
+
+    function applyTexture(tex) {
+        tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+        earthMesh.material.map = tex;
+        earthMesh.material.color.set(0xffffff);
+        earthMesh.material.needsUpdate = true;
+    }
+
+    function tryLoadTexture(index) {
+        if (index >= texUrls.length) {
+            // All URLs failed — use canvas fallback
+            console.log('[EARTH] All texture URLs failed, using canvas fallback');
+            applyTexture(generateEarthCanvas());
+            return;
+        }
+        const loader = new THREE.TextureLoader();
+        loader.crossOrigin = 'anonymous';
+        loader.load(texUrls[index],
+            (tex) => {
+                console.log('[EARTH] Loaded texture from:', texUrls[index]);
+                applyTexture(tex);
+            },
+            undefined,
+            () => {
+                console.log('[EARTH] Failed:', texUrls[index]);
+                tryLoadTexture(index + 1);
+            }
+        );
+    }
+
+    // Also try loading via Image element with crossOrigin (more reliable for some CDNs)
+    function tryImageLoad() {
+        let loaded = false;
+        texUrls.forEach((url, i) => {
+            if (loaded) return;
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => {
+                if (loaded) return;
+                loaded = true;
+                const tex = new THREE.Texture(img);
+                tex.needsUpdate = true;
+                console.log('[EARTH] Loaded via Image element:', url);
+                applyTexture(tex);
+            };
+            img.onerror = () => {
+                if (i === texUrls.length - 1 && !loaded) {
+                    console.log('[EARTH] All Image loads failed, using canvas');
+                    applyTexture(generateEarthCanvas());
+                }
+            };
+            // Stagger attempts slightly
+            setTimeout(() => { img.src = url; }, i * 200);
+        });
+    }
+
+    // Race both approaches
+    tryLoadTexture(0);
+    setTimeout(tryImageLoad, 500);
+
+    // Atmosphere layers
+    scene.add(new THREE.Mesh(
+        new THREE.SphereGeometry(1.012, 64, 32),
+        new THREE.MeshBasicMaterial({ color: 0x4499ff, transparent: true, opacity: 0.04, side: THREE.BackSide })
+    ));
+    scene.add(new THREE.Mesh(
+        new THREE.SphereGeometry(1.05, 48, 24),
+        new THREE.MeshBasicMaterial({ color: 0x2266cc, transparent: true, opacity: 0.02, side: THREE.BackSide })
+    ));
+}
+
+function generateEarthCanvas() {
+    // High-quality procedural Earth texture as final fallback
+    const W = 2048, H = 1024;
+    const can = document.createElement('canvas'); can.width = W; can.height = H;
     const ctx = can.getContext('2d');
 
-    // Dark ocean base
-    ctx.fillStyle = '#0d1520'; ctx.fillRect(0, 0, 1024, 512);
+    // Ocean gradient
+    const grad = ctx.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0, '#091a2a'); grad.addColorStop(0.3, '#0c2035');
+    grad.addColorStop(0.5, '#0e2440'); grad.addColorStop(0.7, '#0c2035');
+    grad.addColorStop(1, '#091a2a');
+    ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
 
-    // Continents (simplified filled regions)
-    ctx.fillStyle = 'rgba(30, 58, 80, 0.7)';
-    const continents = [
-        [250,140,110,80,-0.2], [320,300,50,90,0.15], [520,130,50,40,0],
-        [530,270,55,85,0], [680,140,130,70,0], [790,330,50,35,0.3],
-    ];
-    continents.forEach(([x,y,rx,ry,rot]) => { ctx.beginPath(); ctx.ellipse(x,y,rx,ry,rot,0,Math.PI*2); ctx.fill(); });
+    // Helpers
+    function ll(lon, lat) { return [(lon+180)/360*W, (90-lat)/180*H]; }
+    function poly(coords, color) {
+        ctx.fillStyle = color || '#173040';
+        ctx.beginPath();
+        let [x,y] = ll(coords[0][0], coords[0][1]);
+        ctx.moveTo(x, y);
+        for (let i = 1; i < coords.length; i++) { [x,y] = ll(coords[i][0], coords[i][1]); ctx.lineTo(x, y); }
+        ctx.closePath(); ctx.fill();
+    }
 
+    const land = '#17303f';
+    const landLight = '#1a3848';
+
+    // ---- North America ----
+    poly([[-170,64],[-168,68],[-165,72],[-160,70],[-150,72],[-145,68],[-140,70],[-138,72],[-136,68],[-130,68],[-125,62],[-122,58],[-120,52],[-124,48],[-122,42],[-118,34],[-112,32],[-108,32],[-104,30],[-100,28],[-98,26],[-96,28],[-92,30],[-88,30],[-84,30],[-82,26],[-80,25],[-82,30],[-76,34],[-72,40],[-70,42],[-68,44],[-66,44],[-64,46],[-60,47],[-58,48],[-56,50],[-58,52],[-62,54],[-66,58],[-70,60],[-76,62],[-82,64],[-90,68],[-100,72],[-110,72],[-120,72],[-130,72],[-140,72],[-148,72],[-155,72],[-160,72],[-165,72],[-168,70],[-170,64]], land);
+    // Mexico + Central America
+    poly([[-118,34],[-115,30],[-112,28],[-110,24],[-106,22],[-104,20],[-100,18],[-96,16],[-92,16],[-88,16],[-86,14],[-84,10],[-82,8],[-80,8],[-84,12],[-88,16],[-92,18],[-96,20],[-100,24],[-104,26],[-108,30],[-112,32],[-118,34]], land);
+
+    // ---- South America ----
+    poly([[-80,10],[-77,6],[-74,8],[-70,12],[-66,10],[-62,8],[-58,6],[-52,4],[-48,0],[-44,-2],[-40,-4],[-36,-8],[-34,-12],[-36,-16],[-38,-20],[-42,-22],[-44,-24],[-48,-28],[-50,-30],[-52,-34],[-56,-36],[-60,-40],[-64,-44],[-66,-48],[-68,-54],[-70,-52],[-72,-46],[-74,-40],[-72,-34],[-70,-28],[-68,-22],[-70,-16],[-72,-10],[-74,-4],[-76,0],[-78,4],[-80,10]], land);
+
+    // ---- Africa ----
+    poly([[-18,14],[-16,20],[-14,26],[-8,32],[-4,36],[2,36],[8,38],[12,36],[18,34],[24,32],[30,30],[34,28],[38,24],[42,16],[46,10],[50,4],[48,0],[44,-4],[42,-8],[40,-14],[36,-20],[32,-26],[30,-30],[28,-34],[24,-34],[20,-32],[18,-28],[14,-22],[12,-16],[10,-8],[8,0],[4,6],[0,6],[-4,6],[-8,6],[-12,8],[-16,12],[-18,14]], land);
+
+    // ---- Europe ----
+    poly([[-10,36],[-8,40],[-6,44],[-2,46],[2,48],[6,48],[10,46],[14,46],[18,44],[22,42],[26,40],[28,42],[26,44],[22,48],[18,52],[14,54],[10,58],[6,60],[2,62],[-2,60],[-4,56],[-6,52],[-8,48],[-10,44],[-10,36]], land);
+    // Scandinavia
+    poly([[4,56],[8,58],[12,62],[14,66],[18,70],[22,72],[28,72],[30,70],[28,66],[24,62],[20,58],[16,56],[10,56],[4,56]], land);
+
+    // ---- Asia ----
+    poly([[28,42],[32,40],[36,38],[40,38],[44,38],[50,36],[56,40],[60,42],[64,44],[68,48],[72,52],[76,54],[80,56],[86,54],[92,50],[98,48],[104,44],[108,42],[114,38],[118,34],[120,30],[118,24],[116,20],[112,18],[108,16],[104,14],[100,14],[96,16],[92,20],[88,22],[84,18],[80,16],[76,18],[72,20],[68,24],[64,26],[58,28],[52,30],[46,34],[40,36],[34,38],[28,42]], land);
+    // Siberia
+    poly([[30,52],[28,56],[30,60],[36,64],[42,66],[50,64],[58,66],[66,68],[74,70],[82,72],[90,72],[100,74],[110,74],[120,72],[130,68],[140,64],[150,62],[160,64],[170,66],[180,66],[180,54],[170,52],[160,50],[150,48],[140,46],[134,48],[128,50],[120,52],[112,50],[104,48],[96,50],[88,52],[80,56],[72,52],[64,44],[56,40],[50,36],[44,38],[36,42],[30,46],[28,48],[30,52]], land);
+    // Kamchatka/Far East
+    poly([[155,50],[158,54],[160,58],[162,62],[160,64],[156,60],[154,56],[152,52],[155,50]], land);
+
+    // India
+    poly([[68,24],[72,20],[78,18],[82,16],[80,10],[78,8],[76,8],[74,12],[70,18],[68,24]], land);
+    // SE Asia
+    poly([[100,14],[104,14],[108,16],[112,18],[116,20],[118,16],[116,10],[112,4],[108,0],[104,2],[100,6],[98,10],[100,14]], land);
+
+    // ---- Australia ----
+    poly([[114,-12],[118,-14],[124,-14],[130,-14],[136,-16],[140,-18],[144,-20],[148,-24],[150,-28],[148,-34],[146,-38],[142,-40],[138,-38],[134,-36],[130,-34],[126,-34],[120,-34],[116,-32],[114,-28],[112,-24],[112,-18],[114,-14],[114,-12]], landLight);
+
+    // Japan
+    poly([[130,30],[132,34],[134,36],[136,38],[138,40],[140,42],[142,44],[140,42],[136,38],[132,34],[130,30]], land);
+    // Indonesia (simplified)
+    poly([[96,-2],[100,-4],[104,-6],[108,-8],[112,-8],[116,-8],[120,-6],[124,-4],[128,-4],[126,-8],[120,-10],[114,-10],[108,-8],[102,-6],[96,-2]], land);
+
+    // UK
+    poly([[-8,50],[-6,52],[-4,54],[-2,56],[0,58],[2,56],[2,52],[0,50],[-2,50],[-6,50],[-8,50]], land);
+    // Iceland
+    poly([[-24,64],[-20,66],[-16,66],[-14,64],[-16,62],[-20,62],[-24,64]], land);
+    // Greenland
+    poly([[-56,60],[-52,62],[-48,64],[-42,66],[-36,70],[-28,74],[-22,78],[-26,82],[-34,84],[-44,84],[-52,80],[-56,76],[-58,72],[-56,66],[-56,60]], landLight);
     // Antarctica
-    ctx.fillStyle = 'rgba(40, 70, 90, 0.4)'; ctx.fillRect(0, 470, 1024, 42);
+    ctx.fillStyle = '#1a3040';
+    ctx.fillRect(0, H * 0.92, W, H * 0.08);
 
-    // Grid
-    ctx.strokeStyle = 'rgba(56, 189, 248, 0.06)'; ctx.lineWidth = 0.5;
-    for (let i = 0; i <= 180; i += 15) { ctx.beginPath(); ctx.moveTo(0, i*512/180); ctx.lineTo(1024, i*512/180); ctx.stroke(); }
-    for (let i = 0; i <= 360; i += 15) { ctx.beginPath(); ctx.moveTo(i*1024/360, 0); ctx.lineTo(i*1024/360, 512); ctx.stroke(); }
+    // ---- Grid ----
+    ctx.strokeStyle = 'rgba(56,189,248,0.035)'; ctx.lineWidth = 0.5;
+    for (let lat = -60; lat <= 60; lat += 30) {
+        const y = (90-lat)/180*H;
+        ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
+    }
+    for (let lon = -150; lon <= 150; lon += 30) {
+        const x = (lon+180)/360*W;
+        ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
+    }
+
+    // Equator
+    ctx.strokeStyle = 'rgba(56,189,248,0.06)'; ctx.lineWidth = 1;
+    const eqY = H/2;
+    ctx.beginPath(); ctx.moveTo(0,eqY); ctx.lineTo(W,eqY); ctx.stroke();
 
     // City lights
-    [[250,155],[230,135],[270,165],[210,150],[320,280],[310,310],[520,125],[505,140],[540,120],[530,250],[540,220],[650,130],[700,155],[720,170],[760,140],[790,325]].forEach(([x,y]) => {
-        ctx.fillStyle = 'rgba(245, 210, 120, 0.3)'; ctx.beginPath();
-        ctx.arc(x + Math.random()*20-10, y + Math.random()*20-10, 2 + Math.random()*3, 0, Math.PI*2); ctx.fill();
+    const cities = [
+        [-74,40.7,7],[-87.6,41.9,6],[-118.2,34,7],[-122.4,37.8,5],[-95.4,29.8,5],[-77,38.9,5],[-79.4,43.7,4],[-73.6,45.5,3],[-99.1,19.4,6],[-46.6,-23.5,6],[-43.2,-22.9,5],[-58.4,-34.6,5],[-70.7,-33.4,4],
+        [-0.1,51.5,7],[2.3,48.9,6],[13.4,52.5,5],[-3.7,40.4,5],[12.5,41.9,4],[14.4,50.1,3],[18.1,59.3,3],[24.9,60.2,3],
+        [31.2,30,4],[28,26.8,3],[3.4,36.7,3],[36.8,-1.3,3],
+        [37.6,55.8,5],[44.4,33.3,3],[51.4,35.7,4],[55.3,25.3,4],
+        [77.2,28.6,6],[72.9,19.1,6],[88.4,22.6,5],[80.3,13.1,4],
+        [116.4,39.9,8],[121.5,31.2,7],[114.1,22.3,6],[126.9,37.6,6],[139.7,35.7,7],[100.5,13.8,5],[106.8,-6.2,5],[103.8,1.4,4],
+        [151.2,-33.9,5],[174.8,-36.9,3],
+    ];
+    cities.forEach(([lon, lat, size]) => {
+        const [cx, cy] = ll(lon, lat);
+        const glow = ctx.createRadialGradient(cx,cy,0,cx,cy,size*2);
+        glow.addColorStop(0, `rgba(255,210,120,${0.15+size*0.03})`);
+        glow.addColorStop(1, 'rgba(255,210,120,0)');
+        ctx.fillStyle = glow;
+        ctx.beginPath(); ctx.arc(cx,cy,size*2,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle = `rgba(255,220,140,${0.2+size*0.04})`;
+        ctx.beginPath(); ctx.arc(cx,cy,size*0.5,0,Math.PI*2); ctx.fill();
     });
 
     const tex = new THREE.CanvasTexture(can);
-    earthMesh = new THREE.Mesh(geo, new THREE.MeshPhongMaterial({ map: tex, specular: 0x111111, shininess: 15 }));
-    scene.add(earthMesh);
-
-    // Atmosphere
-    scene.add(new THREE.Mesh(new THREE.SphereGeometry(1.02, 64, 32), new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.04, side: THREE.BackSide })));
-    scene.add(new THREE.Mesh(new THREE.SphereGeometry(1.08, 32, 16), new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.02, side: THREE.BackSide })));
+    return tex;
 }
 
 function createGroundStation() {
@@ -819,7 +1001,7 @@ function buildUI() {
     document.getElementById('gs-name').textContent = gs.name;
     document.getElementById('gs-coords').textContent = `${gs.lat}°N  ${Math.abs(gs.lon)}°W  ${gs.elevation_m}m ASL`;
     document.getElementById('sat-count').textContent = `${satKeys.length} TARGETS`;
-    document.getElementById('bottom-info').textContent = `GS: ${gs.lat}°N ${Math.abs(gs.lon)}°W • NOAA APT 137 MHz VHF • Min El: ${gs.min_elevation_deg}°`;
+    document.getElementById('bottom-info').textContent = `GS: ${gs.lat}°N ${Math.abs(gs.lon)}°W • NOAA APT + METEOR LRPT • 137 MHz VHF • Min El: ${gs.min_elevation_deg}°`;
 
     const src = document.getElementById('data-source');
     if (dataMode === 'live' && serverMode) { src.className = 'data-source live'; src.textContent = `SATCOM SERVER • SKYFIELD SGP4 • ${new Date(orbitalData.generated_utc).toUTCString().slice(0,22)}`; }
@@ -832,9 +1014,19 @@ function buildUI() {
     satKeys.forEach((name, i) => {
         const sat = orbitalData.satellites[name];
         const role = sat.role || 'display';
-        const roleLabel = role === 'primary' ? 'PRIMARY' : role === 'weather' ? 'WX' : '';
         const freqStr = sat.freq_mhz ? `${sat.freq_mhz} MHz` : `NORAD ${sat.norad_id}`;
         const detailStr = `${freqStr} • ${sat.inclination_deg}° inc • ${sat.period_min}min`;
+
+        // Signal type badge
+        let signalBadge = '';
+        if (role === 'primary' || role === 'weather') {
+            const isLRPT = name.toUpperCase().includes('METEOR');
+            signalBadge = isLRPT 
+                ? '<span class="signal-badge lrpt">LRPT</span>' 
+                : '<span class="signal-badge apt">APT</span>';
+        } else {
+            signalBadge = '<span class="signal-badge track">TRACK</span>';
+        }
 
         const div = document.createElement('div');
         div.className = 'sat-item'; div.id = `sat-item-${i}`;
@@ -842,7 +1034,7 @@ function buildUI() {
         div.innerHTML = `
             <div class="sat-dot" style="background:${sat.color};box-shadow:0 0 8px ${sat.color}"></div>
             <div class="sat-info">
-                <div class="sat-name">${sat.name}${roleLabel ? ` <span style="font-size:9px;color:${role === 'primary' ? 'var(--success)' : 'var(--text-dim)'};font-family:JetBrains Mono,monospace;letter-spacing:1px;">${roleLabel}</span>` : ''}</div>
+                <div class="sat-name">${sat.name}${signalBadge}</div>
                 <div class="sat-freq">${detailStr}</div>
             </div>
             <div class="sat-status below" id="sat-status-${i}">BELOW</div>`;
@@ -1501,12 +1693,17 @@ function buildPassSchedule() {
         
         const rowClass = `${elevClass}${p.status === 'active' ? ' active-pass' : ''}`;
         
+        const signalType = p.satellite.toUpperCase().includes('METEOR') ? 'LRPT' : 
+                          (p.freq_mhz ? 'APT' : '\u2014');
+        const signalClass = signalType === 'LRPT' ? 'lrpt' : (signalType === 'APT' ? 'apt' : '');
+        
         return `<tr class="${rowClass}">
             <td><span class="sat-color-dot" style="background:${p.color}"></span>${p.satellite}</td>
             <td>${localDate} ${localTime}<br><span style="color:var(--text-dim);font-size:9px;">${timeUntilStr}</span></td>
             <td>${durMin}m ${durSec}s</td>
             <td>${p.max_el.toFixed(1)}\u00B0</td>
             <td>${p.freq_mhz ? p.freq_mhz + ' MHz' : '\u2014'}</td>
+            <td><span class="signal-type ${signalClass}">${signalType}</span></td>
             <td>${p.role === 'primary' || p.role === 'weather' ? '<span style="color:var(--success);">CAPTURE</span>' : '<span style="color:var(--text-dim);">TRACK</span>'}</td>
         </tr>`;
     }).join('');
