@@ -14,16 +14,14 @@ The system receives, decodes, and displays weather satellite imagery from 137 MH
 ---
 
 ## Quick Start
-
 ```bash
-# Install dependencies
+git clone https://github.com/lukejwaszyn/satellite-ground-station.git
+cd satellite-ground-station
 pip install skyfield numpy scipy pillow scikit-learn pandas
-
-# Start the mission server
 python3 satcom_server.py
+```
 
-# Open the HMI
-# Navigate to http://localhost:8080
+Open [http://localhost:8080](http://localhost:8080) — the mission server fetches TLEs from Celestrak, generates orbital data for 11 satellites across 5 constellations via Skyfield SGP4, and serves the 3D mission operations interface. Works in both server mode (live tracking + capture control) and standalone demo mode (no SDR required).
 ```
 
 The mission server fetches TLEs from Celestrak, generates orbital data for 11 satellites across 5 constellations via Skyfield SGP4, starts the REST API, and serves the 3D mission operations interface. The HMI works in both server mode (live tracking + capture control) and standalone demo mode (simplified Keplerian orbits, no backend required).
