@@ -8,18 +8,21 @@
   @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Outfit:wght@200;300;400;600;700&display=swap');
 
   :root {
-    --bg: #0a0c10;
-    --panel: rgba(12, 16, 24, 0.88);
-    --border: rgba(56, 189, 248, 0.12);
-    --accent: #38bdf8;
-    --accent-dim: rgba(56, 189, 248, 0.3);
-    --accent-glow: rgba(56, 189, 248, 0.08);
-    --warn: #f59e0b;
-    --success: #34d399;
-    --danger: #f87171;
-    --text: #e2e8f0;
-    --text-dim: #64748b;
-    --text-bright: #f8fafc;
+    --bg: #070b14;
+    --panel: rgba(6, 31, 74, 0.75);
+    --border: rgba(16, 91, 216, 0.18);
+    --accent: #105bd8;
+    --accent-dim: rgba(16, 91, 216, 0.35);
+    --accent-glow: rgba(16, 91, 216, 0.08);
+    --accent-bright: #4b96ff;
+    --warn: #ff9d1e;
+    --success: #2e8540;
+    --danger: #dd361c;
+    --text: #dce4ef;
+    --text-dim: #6b7e99;
+    --text-bright: #ffffff;
+    --nasa-blue: #0b3d91;
+    --nasa-red: #fc3d21;
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -70,7 +73,7 @@
   .gs-name { font-size: 18px; font-weight: 600; color: var(--text-bright); margin-bottom: 4px; }
   .gs-coords { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-dim); margin-bottom: 12px; }
   .gs-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-  .stat-box { background: rgba(56,189,248,0.04); border: 1px solid var(--border); border-radius: 6px; padding: 10px; }
+  .stat-box { background: rgba(16,91,216,0.04); border: 1px solid var(--border); border-radius: 6px; padding: 10px; }
   .stat-label { font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 1px; color: var(--text-dim); text-transform: uppercase; margin-bottom: 4px; }
   .stat-value { font-family: 'JetBrains Mono', monospace; font-size: 16px; font-weight: 700; color: var(--text-bright); }
   .stat-value.accent { color: var(--accent); }
@@ -86,7 +89,7 @@
   .sat-name { font-size: 13px; font-weight: 500; color: var(--text-bright); }
   .sat-freq { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-dim); }
   .sat-status { font-family: 'JetBrains Mono', monospace; font-size: 10px; padding: 2px 8px; border-radius: 4px; white-space: nowrap; }
-  .sat-status.visible { background: rgba(52,211,153,0.15); color: var(--success); border: 1px solid rgba(52,211,153,0.3); }
+  .sat-status.visible { background: rgba(46,133,64,0.15); color: var(--success); border: 1px solid rgba(46,133,64,0.3); }
   .sat-status.below { background: rgba(100,116,139,0.15); color: var(--text-dim); border: 1px solid rgba(100,116,139,0.2); }
 
   /* ---------- Pass timeline ---------- */
@@ -103,8 +106,8 @@
   .pass-event-detail { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text); margin-top: 2px; }
 
   /* ---------- Data source badge ---------- */
-  .data-source { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--text-dim); padding: 4px 8px; background: rgba(56,189,248,0.05); border: 1px solid var(--border); border-radius: 4px; text-align: center; margin-top: 8px; }
-  .data-source.live { color: var(--success); border-color: rgba(52,211,153,0.3); }
+  .data-source { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--text-dim); padding: 4px 8px; background: rgba(16,91,216,0.05); border: 1px solid var(--border); border-radius: 4px; text-align: center; margin-top: 8px; }
+  .data-source.live { color: var(--success); border-color: rgba(46,133,64,0.3); }
   .data-source.demo { color: var(--warn); border-color: rgba(245,158,11,0.3); }
 
   /* ---------- Time warp ---------- */
@@ -116,7 +119,7 @@
   .bottom-bar .utc-clock { color: var(--accent); font-weight: 500; }
 
   .controls-hint { position: fixed; bottom: 48px; left: 50%; transform: translateX(-50%); z-index: 10; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-dim); background: var(--panel); border: 1px solid var(--border); border-radius: 20px; padding: 6px 16px; backdrop-filter: blur(10px); opacity: 0.7; pointer-events: none; }
-  kbd { display: inline-block; background: rgba(56,189,248,0.1); border: 1px solid var(--border); border-radius: 3px; padding: 1px 5px; font-size: 9px; margin: 0 2px; }
+  kbd { display: inline-block; background: rgba(16,91,216,0.1); border: 1px solid var(--border); border-radius: 3px; padding: 1px 5px; font-size: 9px; margin: 0 2px; }
 
   /* ---------- Loading ---------- */
   .loading { position: fixed; inset: 0; background: var(--bg); z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity 0.8s, visibility 0.8s; }
@@ -177,12 +180,12 @@
   .pass-table th.sorted::after { content: ' ▼'; font-size: 8px; }
   .pass-table th.sorted.asc::after { content: ' ▲'; }
   .pass-table td {
-    padding: 8px 12px; border-bottom: 1px solid rgba(56, 189, 248, 0.06);
+    padding: 8px 12px; border-bottom: 1px solid rgba(16, 91, 216, 0.08);
     color: var(--text); white-space: nowrap;
   }
   .pass-table tr { transition: background 0.15s; }
   .pass-table tr:hover { background: var(--accent-glow); }
-  .pass-table tr.active-pass { background: rgba(52, 211, 153, 0.08); }
+  .pass-table tr.active-pass { background: rgba(46, 133, 64, 0.08); }
   .pass-table tr.high-elev td:nth-child(4) { color: var(--success); font-weight: 600; }
   .pass-table tr.med-elev td:nth-child(4) { color: var(--warn); }
   .pass-table tr.low-elev td:nth-child(4) { color: var(--text-dim); }
@@ -203,14 +206,14 @@
 
   .capture-btn {
     width: 100%; padding: 10px 16px; border: 1px solid var(--success); border-radius: 8px;
-    background: rgba(52, 211, 153, 0.1); color: var(--success);
+    background: rgba(46, 133, 64, 0.1); color: var(--success);
     font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600;
     letter-spacing: 1px; cursor: pointer; transition: all 0.2s;
     text-transform: uppercase;
   }
-  .capture-btn:hover { background: rgba(52, 211, 153, 0.2); box-shadow: 0 0 20px rgba(52, 211, 153, 0.15); }
+  .capture-btn:hover { background: rgba(46, 133, 64, 0.2); box-shadow: 0 0 20px rgba(46, 133, 64, 0.15); }
   .capture-btn:disabled { opacity: 0.3; cursor: not-allowed; border-color: var(--text-dim); color: var(--text-dim); background: transparent; }
-  .capture-btn.capturing { border-color: var(--warn); color: var(--warn); background: rgba(245, 158, 11, 0.1); animation: pulse-capture 1.5s infinite; }
+  .capture-btn.capturing { border-color: var(--warn); color: var(--warn); background: rgba(255, 157, 30, 0.1); animation: pulse-capture 1.5s infinite; }
   @keyframes pulse-capture { 0%,100%{ box-shadow: 0 0 8px rgba(245,158,11,0.2); } 50%{ box-shadow: 0 0 20px rgba(245,158,11,0.4); } }
 
   .sdr-status { display: flex; align-items: center; gap: 8px; font-family: 'JetBrains Mono', monospace; font-size: 11px; margin-bottom: 8px; }
@@ -230,13 +233,13 @@
     padding: 1px 5px; border-radius: 3px; letter-spacing: 1px; 
     display: inline-block; margin-left: 6px; vertical-align: middle;
   }
-  .signal-badge.apt { background: rgba(139,92,246,0.15); color: #a78bfa; border: 1px solid rgba(139,92,246,0.3); }
+  .signal-badge.apt { background: rgba(75,150,255,0.15); color: #4b96ff; border: 1px solid rgba(75,150,255,0.3); }
   .signal-badge.lrpt { background: rgba(251,146,60,0.15); color: #fb923c; border: 1px solid rgba(251,146,60,0.3); }
   .signal-badge.track { background: rgba(100,116,139,0.1); color: #475569; border: 1px solid rgba(100,116,139,0.2); }
 
   /* ---------- Pass table signal type ---------- */
   .pass-table .signal-type { font-size: 9px; letter-spacing: 1px; }
-  .pass-table .signal-type.apt { color: #a78bfa; }
+  .pass-table .signal-type.apt { color: #4b96ff; }
   .pass-table .signal-type.lrpt { color: #fb923c; }
 </style>
 </head>
@@ -427,7 +430,7 @@ function generateDemoData() {
 
     const demoSats = {
         'NOAA 15': { freq_hz: 137.62e6, freq_mhz: 137.62, color: '#f472b6', norad_id: 25338, inclination_deg: 98.73, period_min: 101.2, raan0: 45, meanAnomaly0: 0, role: 'weather', signal_type: 'APT' },
-        'NOAA 18': { freq_hz: 137.9125e6, freq_mhz: 137.9125, color: '#38bdf8', norad_id: 28654, inclination_deg: 99.0, period_min: 102.1, raan0: 160, meanAnomaly0: 120, role: 'weather', signal_type: 'APT' },
+        'NOAA 18': { freq_hz: 137.9125e6, freq_mhz: 137.9125, color: '#4b96ff', norad_id: 28654, inclination_deg: 99.0, period_min: 102.1, raan0: 160, meanAnomaly0: 120, role: 'weather', signal_type: 'APT' },
         'NOAA 19': { freq_hz: 137.1e6, freq_mhz: 137.1, color: '#a78bfa', norad_id: 33591, inclination_deg: 99.2, period_min: 102.0, raan0: 280, meanAnomaly0: 240, role: 'weather', signal_type: 'APT' },
         'NOAA 20': { freq_hz: 137.1e6, freq_mhz: 137.1, color: '#34d399', norad_id: 43013, inclination_deg: 98.7, period_min: 101.4, raan0: 70, meanAnomaly0: 60, role: 'primary', signal_type: 'APT' },
         'METEOR-M2 3': { freq_hz: 137.9e6, freq_mhz: 137.9, color: '#fb923c', norad_id: 57166, inclination_deg: 98.8, period_min: 99.6, raan0: 200, meanAnomaly0: 180, role: 'weather', signal_type: 'LRPT' },
@@ -622,7 +625,7 @@ function initScene() {
     renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setClearColor(0x0a0c10, 1);
+    renderer.setClearColor(0x070b14, 1);
     document.getElementById('canvas-container').appendChild(renderer.domElement);
 
     createStars();
@@ -634,7 +637,7 @@ function initScene() {
     const sun = new THREE.DirectionalLight(0xfff5e6, 1.4);
     sun.position.set(5, 3, 4);
     scene.add(sun);
-    const rim = new THREE.DirectionalLight(0x38bdf8, 0.3);
+    const rim = new THREE.DirectionalLight(0x105bd8, 0.3);
     rim.position.set(-3, -1, -2);
     scene.add(rim);
 
@@ -774,11 +777,11 @@ function createEarth() {
     // Atmosphere layers
     scene.add(new THREE.Mesh(
         new THREE.SphereGeometry(1.012, 64, 32),
-        new THREE.MeshBasicMaterial({ color: 0x4499ff, transparent: true, opacity: 0.04, side: THREE.BackSide })
+        new THREE.MeshBasicMaterial({ color: 0x105bd8, transparent: true, opacity: 0.04, side: THREE.BackSide })
     ));
     scene.add(new THREE.Mesh(
         new THREE.SphereGeometry(1.05, 48, 24),
-        new THREE.MeshBasicMaterial({ color: 0x2266cc, transparent: true, opacity: 0.02, side: THREE.BackSide })
+        new THREE.MeshBasicMaterial({ color: 0x0b3d91, transparent: true, opacity: 0.02, side: THREE.BackSide })
     ));
 }
 
@@ -856,7 +859,7 @@ function generateEarthCanvas() {
     ctx.fillRect(0, H * 0.92, W, H * 0.08);
 
     // ---- Grid ----
-    ctx.strokeStyle = 'rgba(56,189,248,0.035)'; ctx.lineWidth = 0.5;
+    ctx.strokeStyle = 'rgba(16,91,216,0.035)'; ctx.lineWidth = 0.5;
     for (let lat = -60; lat <= 60; lat += 30) {
         const y = (90-lat)/180*H;
         ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
@@ -867,7 +870,7 @@ function generateEarthCanvas() {
     }
 
     // Equator
-    ctx.strokeStyle = 'rgba(56,189,248,0.06)'; ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(16,91,216,0.06)'; ctx.lineWidth = 1;
     const eqY = H/2;
     ctx.beginPath(); ctx.moveTo(0,eqY); ctx.lineTo(W,eqY); ctx.stroke();
 
@@ -900,17 +903,17 @@ function createGroundStation() {
     const gs = orbitalData.ground_station;
     const pos = latLonToScene(gs.lat, gs.lon, 1.005);
 
-    gsMesh = new THREE.Mesh(new THREE.SphereGeometry(0.012, 16, 16), new THREE.MeshBasicMaterial({ color: 0xf59e0b }));
+    gsMesh = new THREE.Mesh(new THREE.SphereGeometry(0.012, 16, 16), new THREE.MeshBasicMaterial({ color: 0xfc3d21 }));
     gsMesh.position.copy(pos);
     scene.add(gsMesh);
 
     // Pulse ring
-    const ring = new THREE.Mesh(new THREE.RingGeometry(0.015, 0.025, 32), new THREE.MeshBasicMaterial({ color: 0xf59e0b, transparent: true, opacity: 0.4, side: THREE.DoubleSide }));
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.015, 0.025, 32), new THREE.MeshBasicMaterial({ color: 0xfc3d21, transparent: true, opacity: 0.4, side: THREE.DoubleSide }));
     ring.position.copy(pos); ring.lookAt(0, 0, 0);
     scene.add(ring);
 
     // Visibility cone
-    const cone = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.4, 32, 1, true), new THREE.MeshBasicMaterial({ color: 0xf59e0b, transparent: true, opacity: 0.03, side: THREE.DoubleSide }));
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.4, 32, 1, true), new THREE.MeshBasicMaterial({ color: 0xfc3d21, transparent: true, opacity: 0.03, side: THREE.DoubleSide }));
     const normal = pos.clone().normalize();
     cone.position.copy(pos.clone().add(normal.clone().multiplyScalar(0.2)));
     cone.lookAt(pos.clone().add(normal.clone().multiplyScalar(2)));
@@ -1241,7 +1244,7 @@ function drawElevChart(pass, satName) {
     const maxE = Math.max(...elData, 20);
 
     // Grid
-    ctx.strokeStyle = 'rgba(56, 189, 248, 0.08)'; ctx.lineWidth = 0.5;
+    ctx.strokeStyle = 'rgba(16, 91, 216, 0.08)'; ctx.lineWidth = 0.5;
     ctx.font = '8px JetBrains Mono'; ctx.fillStyle = 'rgba(100, 116, 139, 0.5)';
     for (let y = 0; y <= 90; y += 30) {
         const py = h - (y / maxE) * h * 0.9;
@@ -1250,7 +1253,7 @@ function drawElevChart(pass, satName) {
         ctx.fillText(y + '°', 2, py - 2);
     }
 
-    const color = satName && orbitalData.satellites[satName] ? orbitalData.satellites[satName].color : '#38bdf8';
+    const color = satName && orbitalData.satellites[satName] ? orbitalData.satellites[satName].color : '#4b96ff';
 
     // Draw elevation curve
     ctx.beginPath(); ctx.strokeStyle = color; ctx.lineWidth = 1.5;
@@ -1267,9 +1270,9 @@ function drawElevChart(pass, satName) {
 
     // Min elevation threshold
     const threshY = h - (10 / maxE) * h * 0.9;
-    ctx.strokeStyle = 'rgba(245, 158, 11, 0.3)'; ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = 'rgba(255, 157, 30, 0.3)'; ctx.setLineDash([4, 4]);
     ctx.beginPath(); ctx.moveTo(0, threshY); ctx.lineTo(w, threshY); ctx.stroke();
-    ctx.setLineDash([]); ctx.fillStyle = 'rgba(245, 158, 11, 0.5)'; ctx.font = '8px JetBrains Mono';
+    ctx.setLineDash([]); ctx.fillStyle = 'rgba(255, 157, 30, 0.5)'; ctx.font = '8px JetBrains Mono';
     ctx.fillText('10° MIN', w - 40, threshY - 3);
 }
 
@@ -1289,7 +1292,7 @@ function drawDopplerChart(pass, satName) {
     const maxD = Math.max(Math.abs(pass.doppler.max_doppler_hz), Math.abs(pass.doppler.min_doppler_hz), 100);
 
     // Grid
-    ctx.strokeStyle = 'rgba(56, 189, 248, 0.08)'; ctx.lineWidth = 0.5;
+    ctx.strokeStyle = 'rgba(16, 91, 216, 0.08)'; ctx.lineWidth = 0.5;
     ctx.font = '8px JetBrains Mono'; ctx.fillStyle = 'rgba(100, 116, 139, 0.5)';
     const mid = h / 2;
     ctx.beginPath(); ctx.moveTo(0, mid); ctx.lineTo(w, mid); ctx.stroke();
@@ -1297,7 +1300,7 @@ function drawDopplerChart(pass, satName) {
     ctx.fillText(`+${(maxD/1000).toFixed(1)}k`, 2, 10);
     ctx.fillText(`${(-maxD/1000).toFixed(1)}k`, 2, h - 4);
 
-    const color = satName && orbitalData.satellites[satName] ? orbitalData.satellites[satName].color : '#38bdf8';
+    const color = satName && orbitalData.satellites[satName] ? orbitalData.satellites[satName].color : '#4b96ff';
 
     ctx.beginPath(); ctx.strokeStyle = color; ctx.lineWidth = 1.5;
     dData.forEach((d, i) => {
@@ -1311,9 +1314,9 @@ function drawDopplerChart(pass, satName) {
     for (let i = 1; i < dData.length; i++) {
         if ((dData[i-1] > 0 && dData[i] <= 0) || (dData[i-1] < 0 && dData[i] >= 0)) {
             const x = (i / (dData.length - 1)) * w;
-            ctx.fillStyle = 'rgba(245, 158, 11, 0.8)';
+            ctx.fillStyle = 'rgba(255, 157, 30, 0.8)';
             ctx.beginPath(); ctx.arc(x, mid, 3, 0, Math.PI * 2); ctx.fill();
-            ctx.fillStyle = 'rgba(245, 158, 11, 0.5)'; ctx.font = '7px JetBrains Mono';
+            ctx.fillStyle = 'rgba(255, 157, 30, 0.5)'; ctx.font = '7px JetBrains Mono';
             ctx.fillText('TCA', x - 6, mid + 12);
             break;
         }
@@ -1665,7 +1668,7 @@ function getAllPasses() {
             
             passes.push({
                 satellite: name,
-                color: sat.color || '#38bdf8',
+                color: sat.color || '#4b96ff',
                 freq_mhz: sat.freq_mhz || null,
                 freq_hz: sat.freq_hz || null,
                 role: sat.role || 'display',
