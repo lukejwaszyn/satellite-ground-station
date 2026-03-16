@@ -1070,9 +1070,66 @@ function updateStatsUI() {
     if (ageSec < 3600) document.getElementById('data-age').textContent = `${Math.floor(ageSec/60)}m`;
     else document.getElementById('data-age').textContent = `${(ageSec/3600).toFixed(1)}h`;
 
-    // Find next pass across all satellites (prefer primary/weather for Doppler display)
+    // Find active and next passes using REAL-TIME elevation data
+    // This ensures the panel matches what the globe actually shows
+    let activePass = null, activeSatName = null;
     let nextPass = null, nextSatName = null, nextSatIdx = -1;
     let nextPassDoppler = null, nextSatNameDoppler = null;
+    
+    const minEl = orbitalData.ground_station.min_elevation_deg || 10;
+    
+    // First: check real-time elevation for ALL satellites to find active overhead passes
+    satKeys.forEach((name, i) => {
+        const satData = orbitalData.satellites[name];
+        const pos = getSatPositionAtTime(satData, simTimeUnix);
+        if (!pos) return;
+        
+        if (pos.el > minEl) {
+            // This satellite is currently visible — check if it's higher than current active
+            if (!activePass || pos.el > activePass._realtime_el) {
+                // Build a synthetic active pass from real-time data
+                // Try to find the matching pre-computed pass first
+                let matchedPass = null;
+                for (const p of satData.passes) {
+                    if (p.aos_unix <= simTimeUnix && p.los_unix > simTimeUnix) {
+                        matchedPass = p;
+                        break;
+                    }
+                }
+                
+                if (matchedPass) {
+                    // Use the pre-computed pass but override max_el with real-time if higher
+                    activePass = { ...matchedPass, _realtime_el: pos.el };
+                    if (pos.el > matchedPass.max_el) {
+                        activePass.max_el = Math.round(pos.el * 10) / 10;
+                    }
+                } else {
+                    // No pre-computed pass found — synthesize from real-time data
+                    // This handles the case where find_events() missed a pass
+                    activePass = {
+                        aos_utc: new Date((simTimeUnix - 120) * 1000).toISOString(),
+                        aos_unix: simTimeUnix - 120,
+                        tca_utc: new Date(simTimeUnix * 1000).toISOString(),
+                        tca_unix: simTimeUnix,
+                        los_utc: new Date((simTimeUnix + 120) * 1000).toISOString(),
+                        los_unix: simTimeUnix + 120,
+                        max_el: Math.round(pos.el * 10) / 10,
+                        tca_range_km: Math.round(pos.range_km),
+                        tca_az: Math.round(pos.az || 0),
+                        aos_az: 0,
+                        los_az: 0,
+                        duration_sec: 240,
+                        doppler: satData.passes[0]?.doppler || null,
+                        _realtime_el: pos.el,
+                        _synthetic: true,
+                    };
+                }
+                activeSatName = name;
+            }
+        }
+    });
+    
+    // Second: find next upcoming pass from pre-computed list (for when nothing is active)
     satKeys.forEach((name, i) => {
         const satData = orbitalData.satellites[name];
         for (const p of satData.passes) {
@@ -1081,7 +1138,6 @@ function updateStatsUI() {
                 if (!nextPass || aosUnix < (nextPass.aos_unix || Infinity)) {
                     nextPass = p; nextSatName = name; nextSatIdx = i;
                 }
-                // Track the next pass that has Doppler data separately
                 const role = satData.role || 'display';
                 if (p.doppler && (role === 'primary' || role === 'weather')) {
                     if (!nextPassDoppler || aosUnix < (nextPassDoppler.aos_unix || Infinity)) {
@@ -1092,6 +1148,10 @@ function updateStatsUI() {
             }
         }
     });
+    
+    // Prefer active real-time pass over pre-computed next pass
+    const displayPass = activePass || nextPass;
+    const displaySatName = activePass ? activeSatName : nextSatName;
 
     // Total passes in 24h window
     let totalPasses = 0;
@@ -1099,8 +1159,8 @@ function updateStatsUI() {
     document.getElementById('passes-today').textContent = totalPasses;
 
     // Next pass countdown
-    if (nextPass) {
-        const timeUntil = nextPass.aos_unix - simTimeUnix;
+    if (displayPass) {
+        const timeUntil = displayPass.aos_unix - simTimeUnix;
         if (timeUntil <= 0) {
             document.getElementById('next-pass-countdown').textContent = 'NOW';
             document.getElementById('next-pass-countdown').className = 'stat-value success';
@@ -1110,13 +1170,13 @@ function updateStatsUI() {
             document.getElementById('next-pass-countdown').textContent = hrs > 0 ? `${hrs}h${mins%60}m` : `${mins}m`;
             document.getElementById('next-pass-countdown').className = 'stat-value warn';
         }
-        document.getElementById('max-elev').textContent = `${nextPass.max_el}°`;
+        document.getElementById('max-elev').textContent = `${displayPass.max_el}°`;
 
         // Timeline
-        updatePassTimeline(nextPass, nextSatName);
-        // Use the Doppler-capable pass for charts if available, else next pass
-        const chartPass = nextPassDoppler || nextPass;
-        const chartSatName = nextSatNameDoppler || nextSatName;
+        updatePassTimeline(displayPass, displaySatName);
+        // Use the Doppler-capable pass for charts if available, else display pass
+        const chartPass = nextPassDoppler || displayPass;
+        const chartSatName = nextSatNameDoppler || displaySatName;
         drawElevChart(chartPass, chartSatName);
         drawDopplerChart(chartPass, chartSatName);
     }
