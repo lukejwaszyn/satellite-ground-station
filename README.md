@@ -22,9 +22,6 @@ python3 satcom_server.py
 ```
 
 Open [http://localhost:8080](http://localhost:8080) — the mission server fetches TLEs from Celestrak, generates orbital data for 11 satellites across 5 constellations via Skyfield SGP4, and serves the 3D mission operations interface. Works in both server mode (live tracking + capture control) and standalone demo mode (no SDR required).
-```
-
-The mission server fetches TLEs from Celestrak, generates orbital data for 11 satellites across 5 constellations via Skyfield SGP4, starts the REST API, and serves the 3D mission operations interface. The HMI works in both server mode (live tracking + capture control) and standalone demo mode (simplified Keplerian orbits, no backend required).
 
 ---
 
@@ -45,7 +42,6 @@ The mission server fetches TLEs from Celestrak, generates orbital data for 11 sa
 Formal systems engineering methodology with requirements-driven development (FR/PR/IR), L0–L2 architecture decomposition, and staged V0–V6 verification.
 
 ### Integration Architecture
-
 ```
 Browser HMI (Three.js/WebGL)
     │
@@ -173,24 +169,24 @@ The browser-based HMI provides real-time mission operations at `http://localhost
 
 | File | Lines | Description |
 |------|-------|-------------|
-| `satellite-viz.html` | 1,646 | 3D HMI — globe, pass timeline, mission control, pass schedule |
-| `decode_lrpt.py` | 1,001 | METEOR LRPT decoder (QPSK, Viterbi, CCSDS, Reed-Solomon) |
+| `hmi/satellite-viz.html` | 1,646 | 3D HMI — globe, pass timeline, mission control, pass schedule |
+| `python/demod/decode_lrpt.py` | 1,001 | METEOR LRPT decoder (QPSK, Viterbi, CCSDS, Reed-Solomon) |
 | `satcom_server.py` | 762 | Unified REST API — orbital data, capture control, decoder routing |
-| `generate_orbital_data.py` | 582 | Multi-constellation orbital predictor (11 sats, 5 groups) |
-| `schedule_captures.py` | 465 | Capture orchestration and automation pipeline |
-| `decode_apt.py` | 473 | NOAA APT decoder (FM demod, AM envelope, sync detection) |
-| `model_trainer.py` | 418 | ML model training pipeline |
-| `data_store.py` | 410 | Mission database layer |
-| `pass_scorer.py` | 338 | Rule-based and ML-driven pass scoring |
-| `feature_engineering.py` | 337 | ML feature extraction from pass/weather data |
-| `run_mission.py` | 315 | Autonomous mission execution |
-| `scheduler_optimizer.py` | 315 | Schedule optimization engine |
-| `ml_predictor.py` | 309 | ML prediction interface |
-| `doppler_tracker.cpp` | 303 | Real-time Doppler compensation (C++) |
-| `rtlsdr_capture.cpp` | 280 | Async I/Q capture with ring buffer (C++) |
-| `doppler_calc.py` | 225 | Doppler frequency profile generation |
-| `decode_apt_wav.py` | 143 | APT decoder for pre-recorded WAV files |
-| `predict_passes.py` | 110 | SGP4 pass prediction utilities |
+| `hmi/generate_orbital_data.py` | 582 | Multi-constellation orbital predictor (11 sats, 5 groups) |
+| `python/schedule_captures.py` | 465 | Capture orchestration and automation pipeline |
+| `python/demod/decode_apt.py` | 473 | NOAA APT decoder (FM demod, AM envelope, sync detection) |
+| `python/ml/model_trainer.py` | 418 | ML model training pipeline |
+| `python/ml/data_store.py` | 410 | Mission database layer |
+| `python/ml/pass_scorer.py` | 338 | Rule-based and ML-driven pass scoring |
+| `python/ml/feature_engineering.py` | 337 | ML feature extraction from pass/weather data |
+| `python/run_mission.py` | 315 | Autonomous mission execution |
+| `python/ml/scheduler_optimizer.py` | 315 | Schedule optimization engine |
+| `python/ml/ml_predictor.py` | 309 | ML prediction interface |
+| `cpp/src/doppler_tracker.cpp` | 303 | Real-time Doppler compensation (C++) |
+| `cpp/src/rtlsdr_capture.cpp` | 280 | Async I/Q capture with ring buffer (C++) |
+| `python/doppler_calc.py` | 225 | Doppler frequency profile generation |
+| `python/demod/decode_apt_wav.py` | 143 | APT decoder for pre-recorded WAV files |
+| `python/predict_passes.py` | 110 | SGP4 pass prediction utilities |
 
 ---
 
@@ -231,7 +227,7 @@ Replaced cheap USB-C hub with Apple USB-A to USB-C adapter. NOAA 21 at 89.7°: 2
 
 ## Current Focus
 
-- **Antenna:** QFH antenna build with Dr. Bilen's Space Systems Lab for RHCP match and hemispherical coverage
+- **Antenna:** QFH antenna build with Dr. Bilén's Space Systems Lab for RHCP match and hemispherical coverage
 - **Image Quality:** First clean decoded image with visible weather features (V3+ milestone)
 - **LRPT Validation:** Test METEOR LRPT decoder on real captures once antenna is operational
 - **Satellite Catalog Fix:** NOAA 20/21 (JPSS series) don't transmit APT — need reclassification to display-only or HRPT
