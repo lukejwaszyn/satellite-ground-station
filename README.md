@@ -283,4 +283,4 @@ MIT License — see LICENSE file for details.
 
 ## Acknowledgments
 
-This project applies formal systems engineering methodology inspired by JPL's approach to mission design and verification. Orbital mechanics via the Skyfield library by Brandon Rhodes. APT signal format per NOAA KLM User's Guide. LRPT decoding based on the CCSDS standards and METEOR-M documentation. Earth visualization uses the NASA Blue Marble texture. Built at Penn State, supported by Dr. Sven Bilén's Space Systems Research Lab.
+This project applies formal systems engineering methodology inspired by JPL's approach to mission design and verification. Orbital mechanics via the Skyfield library by Brandon Rhodes. APT signal format per NOAA KLM User's Guide. LRPT decoding based on the CCSDS standards and METEOR-M documentation. Earth visualization uses the NASA Blue Marble texture. Built at Penn State. 
