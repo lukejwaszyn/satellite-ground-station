@@ -6,9 +6,9 @@ Autonomous ground station for weather satellite image reception with multi-const
 
 The system receives, decodes, and displays weather satellite imagery from 137 MHz polar-orbiting satellites using a software-defined radio, custom antenna, and an end-to-end software pipeline spanning orbital prediction, RF capture, signal decoding, and mission automation — 8,500+ lines of source code across Python, C++, JavaScript, and MATLAB.
 
-**Project Duration:** January 2026 – Present (ongoing)  
+**Project Duration:** January 2026 – May 2026
 **Author:** Luke Waszyn, Engineering Science, Penn State  
-**Status:** V3+ — First signals decoded, antenna upgrade and image quality iteration in progress  
+**Status:** V3+ — First signals decoded. 
 **Location:** State College, PA (40.7934°N, 77.8600°W, 376m ASL)
 
 ---
